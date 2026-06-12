@@ -157,16 +157,16 @@ export interface ViewerTimeline {
 export interface Database {
   public: {
     Tables: {
-      profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile> }
-      studios: { Row: Studio; Insert: Partial<Studio>; Update: Partial<Studio> }
-      clients: { Row: Client; Insert: Partial<Client>; Update: Partial<Client> }
-      live_sessions: { Row: LiveSession; Insert: Partial<LiveSession>; Update: Partial<LiveSession> }
-      session_metrics: { Row: SessionMetrics; Insert: Partial<SessionMetrics>; Update: Partial<SessionMetrics> }
-      realtime_events: { Row: RealtimeEvent; Insert: Partial<RealtimeEvent>; Update: Partial<RealtimeEvent> }
-      media_assets: { Row: MediaAsset; Insert: Partial<MediaAsset>; Update: Partial<MediaAsset> }
-      reports: { Row: Report; Insert: Partial<Report>; Update: Partial<Report> }
-      notifications: { Row: Notification; Insert: Partial<Notification>; Update: Partial<Notification> }
-      viewer_timeline: { Row: ViewerTimeline; Insert: Partial<ViewerTimeline>; Update: Partial<ViewerTimeline> }
+      profiles: { Row: Profile; Insert: Partial<Profile>; Update: Partial<Profile>; Relationships: any[] }
+      studios: { Row: Studio; Insert: Partial<Studio>; Update: Partial<Studio>; Relationships: any[] }
+      clients: { Row: Client; Insert: Partial<Client>; Update: Partial<Client>; Relationships: any[] }
+      live_sessions: { Row: LiveSession; Insert: Partial<LiveSession>; Update: Partial<LiveSession>; Relationships: any[] }
+      session_metrics: { Row: SessionMetrics; Insert: Partial<SessionMetrics>; Update: Partial<SessionMetrics>; Relationships: any[] }
+      realtime_events: { Row: RealtimeEvent; Insert: Partial<RealtimeEvent>; Update: Partial<RealtimeEvent>; Relationships: any[] }
+      media_assets: { Row: MediaAsset; Insert: Partial<MediaAsset>; Update: Partial<MediaAsset>; Relationships: any[] }
+      reports: { Row: Report; Insert: Partial<Report>; Update: Partial<Report>; Relationships: any[] }
+      notifications: { Row: Notification; Insert: Partial<Notification>; Update: Partial<Notification>; Relationships: any[] }
+      viewer_timeline: { Row: ViewerTimeline; Insert: Partial<ViewerTimeline>; Update: Partial<ViewerTimeline>; Relationships: any[] }
     }
     Views: {
       [_ in never]: never
