@@ -27,8 +27,8 @@ export default function MediaPage() {
         toast.loading(`Mengupload ${file.name}...`, { id: file.name })
 
         const result = await uploadToCloudinary(file, {
-          folder: 'streamhive',
-          tags: ['streamhive'],
+          folder: 'iranza-live',
+          tags: ['iranza-live'],
           onProgress: setUploadProgress,
         })
 
@@ -43,7 +43,7 @@ export default function MediaPage() {
           width: result.width,
           height: result.height,
           uploaded_by: profile?.id,
-          tags: ['streamhive'],
+          tags: ['iranza-live'],
         })
 
         if (error) throw error
