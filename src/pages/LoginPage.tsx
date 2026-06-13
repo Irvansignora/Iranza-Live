@@ -48,10 +48,10 @@ export default function LoginPage() {
               <span className="absolute top-1 right-1 w-2 h-2 bg-accent2 rounded-full animate-pulse2" />
             </div>
             <span className="font-display text-3xl tracking-widest text-text">
-              Stream<span className="text-accent">Hive</span>
+              Iranza <span className="text-accent">Live</span>
             </span>
           </div>
-          <p className="text-muted text-sm font-body">Live Streaming Agency Dashboard</p>
+          <p className="text-muted text-sm font-body">Jasa Live Streaming Profesional</p>
         </div>
 
         {/* Card */}
