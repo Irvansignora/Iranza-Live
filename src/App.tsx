@@ -4,6 +4,7 @@ import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
+import LandingPage from '@/pages/LandingPage'
 import LoginPage from '@/pages/LoginPage'
 import DashboardPage from '@/pages/DashboardPage'
 import SessionsPage from '@/pages/SessionsPage'
@@ -15,6 +16,7 @@ import ReportsPage from '@/pages/ReportsPage'
 import StudiosPage from '@/pages/StudiosPage'
 import UsersPage from '@/pages/UsersPage'
 import MetricsInputPage from '@/pages/MetricsInputPage'
+import SettingsPage from '@/pages/SettingsPage'
 
 export default function App() {
   const { initialize } = useAuthStore()
@@ -42,16 +44,17 @@ export default function App() {
       />
 
       <Routes>
-        {/* Public routes */}
+        {/* ── LANDING PAGE (public, root) ── */}
+        <Route path="/" element={<LandingPage />} />
+
+        {/* ── LOGIN (public only) ── */}
         <Route element={<PublicOnlyRoute />}>
           <Route path="/login" element={<LoginPage />} />
         </Route>
 
-        {/* Protected routes */}
+        {/* ── DASHBOARD (protected) ── */}
         <Route element={<ProtectedRoute />}>
           <Route element={<Layout />}>
-            {/* Redirect root */}
-            <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="/dashboard" element={<DashboardPage />} />
 
             {/* Sessions */}
@@ -80,18 +83,8 @@ export default function App() {
         </Route>
 
         {/* Fallback */}
-        <Route path="*" element={<Navigate to="/dashboard" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
-  )
-}
-
-// Simple settings placeholder
-function SettingsPage() {
-  return (
-    <div className="p-6">
-      <h1 className="font-display text-3xl tracking-widest text-text">PENGATURAN <span className="text-accent">SISTEM</span></h1>
-      <p className="text-muted text-sm font-body mt-2">Coming soon — konfigurasi agency, notifikasi email, webhook, dll.</p>
-    </div>
   )
 }
