@@ -153,6 +153,12 @@ export interface ViewerTimeline {
   viewer_count: number
 }
 
+export interface LandingConfig {
+  id: number
+  settings: Record<string, unknown>
+  updated_at: string
+}
+
 // ── Database type for Supabase client ──
 export interface Database {
   public: {
@@ -167,6 +173,7 @@ export interface Database {
       reports: { Row: Report; Insert: Partial<Report>; Update: Partial<Report>; Relationships: any[] }
       notifications: { Row: Notification; Insert: Partial<Notification>; Update: Partial<Notification>; Relationships: any[] }
       viewer_timeline: { Row: ViewerTimeline; Insert: Partial<ViewerTimeline>; Update: Partial<ViewerTimeline>; Relationships: any[] }
+      landing_settings: { Row: LandingConfig; Insert: Partial<LandingConfig>; Update: Partial<LandingConfig>; Relationships: any[] }
     }
     Views: {
       [_ in never]: never
