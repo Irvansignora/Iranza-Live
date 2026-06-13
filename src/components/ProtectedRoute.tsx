@@ -16,7 +16,7 @@ export function ProtectedRoute({ allowedRoles, redirectTo = '/login' }: Protecte
       <div className="min-h-screen bg-bg flex items-center justify-center">
         <div className="text-center">
           <div className="font-display text-3xl tracking-widest text-text mb-3">
-            Stream<span className="text-accent">Hive</span>
+            Iranza <span className="text-accent">Live</span>
           </div>
           <div className="flex gap-1.5 justify-center">
             {[0, 1, 2].map(i => (
