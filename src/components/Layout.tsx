@@ -77,7 +77,7 @@ export default function Layout() {
           </div>
           {!sidebarCollapsed && (
             <span className="font-display text-xl tracking-widest text-text whitespace-nowrap">
-              Stream<span className="text-accent">Hive</span>
+              Iranza <span className="text-accent">Live</span>
             </span>
           )}
         </div>
