@@ -24,7 +24,7 @@ const navItems = {
   ],
   admin_extra: [
     { to: '/users', icon: '👥', label: 'Users' },
-    { to: '/settings', icon: '⚙️', label: 'Pengaturan' },
+    { to: '/settings', icon: '⚙️', label: 'Landing Page' },
   ],
 }
 
@@ -130,6 +130,23 @@ export default function Layout() {
           </div>
         </nav>
 
+        {/* Landing Page Link */}
+        <div className="px-3 pb-2">
+          <a
+            href="/"
+            target="_blank"
+            rel="noopener"
+            className={cn(
+              'flex items-center gap-3 px-3 py-2.5 rounded-xl transition-all text-sm font-body group',
+              'text-muted hover:text-accent hover:bg-accent/5 border border-transparent hover:border-accent/20'
+            )}
+            title={sidebarCollapsed ? 'Landing Page' : undefined}
+          >
+            <span className="text-base flex-shrink-0">🌐</span>
+            {!sidebarCollapsed && <span className="font-medium">Landing Page</span>}
+          </a>
+        </div>
+
         {/* User */}
         <div className="p-3 border-t border-border">
           <div className={cn('flex items-center gap-2', sidebarCollapsed && 'justify-center')}>
@@ -142,8 +159,21 @@ export default function Layout() {
                 <div className="text-xs text-muted capitalize">{profile?.role?.replace('_', ' ')}</div>
               </div>
             )}
-            {!sidebarCollapsed && (
-              <button onClick={handleSignOut} className="text-muted hover:text-accent2 transition-colors text-xs" title="Keluar">
+            {!sidebarCollapsed ? (
+              <button
+                onClick={handleSignOut}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-body font-medium text-muted hover:text-accent2 hover:bg-accent2/10 border border-transparent hover:border-accent2/20 transition-all"
+                title="Keluar"
+              >
+                <span>⏻</span>
+                <span>Keluar</span>
+              </button>
+            ) : (
+              <button
+                onClick={handleSignOut}
+                className="text-muted hover:text-accent2 transition-colors text-xs"
+                title="Keluar"
+              >
                 ⏻
               </button>
             )}
