@@ -1,516 +1,601 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 
 interface LandingSettings {
-  tagline: string
-  subtagline: string
   whatsapp_number: string
-  hero_stats: { label: string; value: string }[]
   slot_pagi_times: string
   slot_malam_times: string
-  promo_label: string
   prices: {
-    pagi_shopee: string
-    pagi_tiktok: string
-    pagi_dual: string
-    malam_shopee: string
-    malam_tiktok: string
-    malam_dual: string
+    pagi_shopee: string; pagi_tiktok: string; pagi_dual: string
+    malam_shopee: string; malam_tiktok: string; malam_dual: string
   }
-  features: { icon: string; title: string; desc: string }[]
-  cta_title: string
-  cta_sub: string
-  testimonials?: { icon: string; name: string; role: string; text: string }[]
+  testimonials: { icon: string; name: string; role: string; text: string }[]
 }
 
 const DEFAULT: LandingSettings = {
-  tagline: 'Jualan Makin Laris Lewat Live Streaming',
-  subtagline: 'Jasa live streaming profesional untuk UMKM di Shopee & TikTok Shop. Host berpengalaman, kualitas HD, strategi penjualan yang terbukti naik konversi.',
   whatsapp_number: '6285776077292',
-  hero_stats: [
-    { value: '50+', label: 'Seller Aktif' },
-    { value: '4', label: 'Slot Per Hari' },
-    { value: '2H', label: 'Per Sesi' },
-    { value: '4.9★', label: 'Rating' },
-  ],
-  slot_pagi_times: '05.00–09.00 & 11.00–14.00 WIB',
-  slot_malam_times: '16.00–18.00 & 20.00–02.00 WIB',
-  promo_label: 'PROMO LAUNCHING — TERBATAS 4 SLOT/HARI!',
+  slot_pagi_times: '05.00–09.00 · 11.00–14.00 WIB',
+  slot_malam_times: '16.00–18.00 · 20.00–02.00 WIB',
   prices: {
-    pagi_shopee: '60RB', pagi_tiktok: '60RB', pagi_dual: '80RB',
-    malam_shopee: '90RB', malam_tiktok: '90RB', malam_dual: '150RB',
+    pagi_shopee: '60', pagi_tiktok: '60', pagi_dual: '80',
+    malam_shopee: '90', malam_tiktok: '90', malam_dual: '150',
   },
-  features: [
-    { icon: '🎙️', title: 'Host Berpengalaman', desc: 'Terlatih dalam teknik closing, upsell, dan interaksi audience yang meningkatkan konversi.' },
-    { icon: '📹', title: 'Kualitas Video HD', desc: 'Audio jernih, lighting profesional. Tampilan live yang membuat produk kamu makin menarik.' },
-    { icon: '📊', title: 'Strategi Penjualan', desc: 'Script closing, optimasi produk highlight, dan teknik flash sale yang terbukti efektif.' },
-    { icon: '🔒', title: 'Aman & Terpercaya', desc: 'Profesional, tepat waktu, dan hasil memuaskan. Reputasi toko kamu adalah prioritas kami.' },
-  ],
-  cta_title: 'Siap Bikin Toko Kamu Live & Cuan Optimal?',
-  cta_sub: 'Hubungi kami sekarang — konsultasi gratis, tanpa ribet. Slot terbatas, jangan sampai penuh!',
   testimonials: [
-    { icon: '🧕', name: 'Sari Dewi', role: 'Toko Fashion Hijab • Shopee', text: 'Sejak pakai Iranza Live, penjualan toko Shopee aku naik 3x lipat! Host-nya aktif banget engage sama penonton, produk cepet abis.' },
-    { icon: '👨', name: 'Budi Santoso', role: 'Toko Elektronik • TikTok Shop', text: 'Awalnya ragu karena harga murah, tapi ternyata kualitasnya pro banget. Audio bagus, host ramah, dan yang penting orderan masuk terus!' },
-    { icon: '👩', name: 'Rina Marlina', role: 'Toko Skincare • Dual Platform', text: 'Dual platform Shopee + TikTok barengan dengan harga segitu? Worth it banget! Viewers dari TikTok juga banyak yang pindah beli di Shopee.' },
+    { icon: '🧕', name: 'Sari Dewi', role: 'Fashion Hijab · Shopee Live', text: 'Sejak pakai Iranza Live, sesi Shopee gua selalu tembus 1000+ viewers. Host-nya ngerti banget cara ngomong ke penonton — produk cepet abis sebelum sesi kelar.' },
+    { icon: '👨', name: 'Budi Santoso', role: 'Elektronik · Dual Platform', text: 'Gua coba dual platform pertama kali, skeptis awalnya. Tapi dalam 2 jam satu sesi, total order dari Shopee dan TikTok lebih dari yang biasanya gua dapet seminggu.' },
+    { icon: '👩', name: 'Rina Marlina', role: 'Skincare · TikTok Shop', text: 'Yang bikin gua loyal bukan cuma hasilnya, tapi mereka kirim laporan lengkap setiap sesi — viewers, engagement, konversi. Gua bisa track perkembangan toko gua.' },
+    { icon: '🧑', name: 'Ahmad Fauzi', role: 'Makanan & Minuman · Shopee', text: 'Harganya murah tapi kualitasnya jauh di atas ekspektasi. Sudah 2 bulan langganan, omset naik konsisten tiap minggunya. Rekomen banget buat seller yang baru mau coba live.' },
+    { icon: '👩\u200d🦱', name: 'Dewi Lestari', role: 'Pakaian Anak · TikTok Shop', text: 'Slot malamnya mantap, waktu paling ramai pembeli online. Host mereka natural ngobrolnya, ga kaku, dan selalu bisa jawab pertanyaan produk dengan baik dan meyakinkan.' },
   ],
 }
 
-const CHATS = [
-  { color: '#FF6B00', avatar: '🧑', user: 'user123', msg: 'beli 2pcs!' },
-  { color: '#7C3AED', avatar: '👩', user: 'siti_shop', msg: 'ada size XL?' },
-  { color: '#10B981', avatar: '🧕', user: 'ani99', msg: '💝 kirim gift!' },
-  { color: '#F59E0B', avatar: '👨', user: 'budi_jkt', msg: 'mau order dong' },
+const HERO_WORDS = [
+  { text: 'Kami', italic: false, orange: false },
+  { text: 'Jalankan', italic: true, orange: false, br: true },
+  { text: 'Live', italic: false, orange: true },
+  { text: 'Streaming', italic: false, orange: false, br: true },
+  { text: 'Toko', italic: false, orange: false },
+  { text: 'Kamu.', italic: true, orange: false },
 ]
 
-const TICKER_ITEMS = [
-  { num: '50+', label: 'Seller Aktif' }, { num: '4', label: 'Slot/Hari' },
-  { num: '2 Jam', label: 'Per Sesi' }, { icon: '🎯', label: 'Host Profesional' },
-  { num: 'HD', label: 'Kualitas Video' }, { icon: '📦', label: 'Shopee + TikTok' },
-  { num: '4.9★', label: 'Rating Kepuasan' }, { icon: '⚡', label: 'Promo Launching!' },
+const MARQUEE_1 = ['Live Shopee', 'TikTok Shop Live', 'Dual Platform', 'Host Profesional', 'Promo Launching', '4 Slot Per Hari', 'Kualitas HD', 'Mulai 60rb / Sesi']
+const MARQUEE_2 = ['Live Profesional', 'Hasil Maksimal', 'Slot Pagi & Siang', 'Slot Sore & Malam', 'Promo Launching!', 'Booking Sekarang']
+
+const SERVICES = [
+  { num: '01', name: 'Shopee Live', bg: 'rgba(255,77,0,0.05)',
+    desc: 'Jangkau jutaan pembeli aktif Shopee. Kami optimalkan voucher, product pin, flash sale, dan interaksi real-time untuk dorong konversi dan pembelian impulsif di setiap sesi.',
+    tags: ['Flash Sale', 'Voucher Live', 'Product Pin', 'Real-time Q&A'] },
+  { num: '02', name: 'TikTok Shop Live', bg: 'rgba(124,58,237,0.06)',
+    desc: 'Algoritma TikTok membawa traffic organik yang tidak bisa dibeli. Kami buat setiap momen live menjadi konten yang engaging — dari hook pembuka sampai closing yang mendorong klik "Beli".',
+    tags: ['For You Page', 'Gift Engagement', 'Viral Hook', 'Product Showcase'] },
+  { num: '03', name: 'Dual Platform', bg: 'rgba(255,214,0,0.05)',
+    desc: 'Satu host, dua platform berjalan bersamaan. Dobel jangkauan, dobel potensi penjualan — dengan efisiensi biaya yang lebih tinggi dibanding booking terpisah.',
+    tags: ['Shopee + TikTok', '2 Jam / Sesi', 'Best Value'] },
 ]
+
+function useReveal() {
+  const [visible, setVisible] = useState<Set<string>>(new Set())
+  useEffect(() => {
+    const els = document.querySelectorAll('[data-reveal-id]')
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => {
+        if (e.isIntersecting && e.target instanceof HTMLElement) {
+          const id = e.target.dataset.revealId!
+          const d = parseFloat(e.target.dataset.revealDelay || '0')
+          setTimeout(() => setVisible(prev => new Set([...prev, id])), d * 70)
+          obs.unobserve(e.target)
+        }
+      })
+    }, { threshold: 0.07, rootMargin: '0px 0px -30px 0px' })
+    els.forEach(el => obs.observe(el))
+    return () => obs.disconnect()
+  }, [])
+  return visible
+}
+
+function useCountUp(target: number, active: boolean) {
+  const [val, setVal] = useState(0)
+  useEffect(() => {
+    if (!active) return
+    const dur = 1600, step = 16
+    const inc = target / (dur / step)
+    let cur = 0
+    const timer = setInterval(() => {
+      cur = Math.min(cur + inc, target)
+      setVal(Math.floor(cur))
+      if (cur >= target) clearInterval(timer)
+    }, step)
+    return () => clearInterval(timer)
+  }, [active, target])
+  return val
+}
 
 export default function LandingPage() {
   const [s, setS] = useState<LandingSettings>(DEFAULT)
-  const [loading, setLoading] = useState(true)
   const [scrolled, setScrolled] = useState(false)
-  const [visibleChats, setVisibleChats] = useState<number[]>([])
-  const chatTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const visible = useReveal()
+  const trackRef = useRef<HTMLDivElement>(null)
+  const draggingRef = useRef(false)
+  const startXRef = useRef(0)
+  const scrollLeftRef = useRef(0)
+  const cursorRef = useRef<HTMLDivElement>(null)
+  const ringRef = useRef<HTMLDivElement>(null)
+  const labelRef = useRef<HTMLDivElement>(null)
+  const [cursorMode, setCursorMode] = useState<'default' | 'hover' | 'cta'>('default')
+  const [isDesktop, setIsDesktop] = useState(true)
 
   useEffect(() => {
     supabase.from('landing_settings').select('*').eq('id', 1).maybeSingle()
-      .then(({ data }) => {
-        if (data?.settings) setS({ ...DEFAULT, ...data.settings })
-        setLoading(false)
-      })
+      .then(({ data }) => { if (data?.settings) setS({ ...DEFAULT, ...data.settings }) })
   }, [])
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 20)
-    window.addEventListener('scroll', handler)
+    const handler = () => setScrolled(window.scrollY > 60)
+    window.addEventListener('scroll', handler, { passive: true })
     return () => window.removeEventListener('scroll', handler)
   }, [])
 
-  // Animate chats sequentially
   useEffect(() => {
-    let idx = 0
-    const runCycle = () => {
-      setVisibleChats([])
-      const showNext = () => {
-        if (idx < CHATS.length) {
-          setVisibleChats(prev => [...prev, idx])
-          idx++
-          chatTimerRef.current = setTimeout(showNext, 800)
-        } else {
-          chatTimerRef.current = setTimeout(() => { idx = 0; runCycle() }, 3000)
-        }
-      }
-      chatTimerRef.current = setTimeout(showNext, 600)
-    }
-    const start = setTimeout(runCycle, 1200)
-    return () => {
-      clearTimeout(start)
-      if (chatTimerRef.current) clearTimeout(chatTimerRef.current)
-    }
+    setIsDesktop(window.matchMedia('(min-width:769px)').matches)
   }, [])
+
+  // Custom cursor
+  useEffect(() => {
+    if (!isDesktop) return
+    let mx = 0, my = 0, rx = 0, ry = 0, raf: number
+    const move = (e: MouseEvent) => { mx = e.clientX; my = e.clientY }
+    window.addEventListener('mousemove', move)
+    const anim = () => {
+      rx += (mx - rx) * 0.12
+      ry += (my - ry) * 0.12
+      if (cursorRef.current) { cursorRef.current.style.left = mx + 'px'; cursorRef.current.style.top = my + 'px' }
+      if (ringRef.current) { ringRef.current.style.left = rx + 'px'; ringRef.current.style.top = ry + 'px' }
+      if (labelRef.current) { labelRef.current.style.left = mx + 'px'; labelRef.current.style.top = my + 'px' }
+      raf = requestAnimationFrame(anim)
+    }
+    anim()
+    return () => { window.removeEventListener('mousemove', move); cancelAnimationFrame(raf) }
+  }, [isDesktop])
+
+  // Pointer enter/leave for interactive elements
+  useEffect(() => {
+    if (!isDesktop) return
+    const els = document.querySelectorAll('a, button, [data-service-item]')
+    const onEnter = (e: Event) => {
+      const el = e.currentTarget as HTMLElement
+      setCursorMode(el.dataset.cursorCta === 'true' ? 'cta' : 'hover')
+    }
+    const onLeave = () => setCursorMode('default')
+    els.forEach(el => { el.addEventListener('mouseenter', onEnter); el.addEventListener('mouseleave', onLeave) })
+    return () => els.forEach(el => { el.removeEventListener('mouseenter', onEnter); el.removeEventListener('mouseleave', onLeave) })
+  }, [isDesktop, s])
 
   const wa = (msg: string) => `https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(msg)}`
   const phone = s.whatsapp_number.replace('62', '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3')
 
-  if (loading) return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#FFFBF5' }}>
-      <div style={{ fontFamily: 'Poppins, sans-serif', fontWeight: 900, fontSize: 28, color: '#FF6B00' }}>Iranza Live</div>
-    </div>
-  )
+  const rv = (id: string): React.CSSProperties => ({
+    opacity: visible.has(id) ? 1 : 0,
+    transform: visible.has(id) ? 'none' : 'translateY(32px)',
+    transition: 'opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1)',
+  })
 
-  const G = 'linear-gradient(135deg,#FFB800 0%,#FF6B00 55%,#FF3D7A 100%)'
-  const GText: React.CSSProperties = { background: G, WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }
+  const statsActive = visible.has('about-stats')
+  const c50 = useCountUp(50, statsActive)
+  const c4 = useCountUp(4, statsActive)
+  const c2 = useCountUp(2, statsActive)
+
+  const G = '#FF4D00'
+
+  // testimonial drag
+  const onTrackDown = (e: React.MouseEvent) => {
+    draggingRef.current = true
+    startXRef.current = e.pageX
+    scrollLeftRef.current = trackRef.current?.scrollLeft || 0
+  }
+  const onTrackUp = () => { draggingRef.current = false }
+  const onTrackMove = (e: React.MouseEvent) => {
+    if (!draggingRef.current || !trackRef.current) return
+    e.preventDefault()
+    const dx = e.pageX - startXRef.current
+    trackRef.current.scrollLeft = scrollLeftRef.current - dx * 1.4
+  }
+  const scrollTesti = (dir: number) => trackRef.current?.scrollBy({ left: dir * 420, behavior: 'smooth' })
 
   return (
-    <div style={{ fontFamily: "'Inter', sans-serif", background: '#fff', color: '#111827', overflowX: 'hidden' }}>
+    <div style={{ background: '#0C0C0C', color: '#F0EDE6', fontFamily: "'DM Sans', sans-serif", fontWeight: 300, overflowX: 'hidden', WebkitFontSmoothing: 'antialiased', cursor: isDesktop ? 'none' : 'auto' }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800;900&family=Inter:wght@400;500;600&display=swap');
-        html { scroll-behavior: smooth; }
-        * { box-sizing: border-box; margin: 0; padding: 0; }
-        .lp-btn-primary { display:inline-flex;align-items:center;gap:8px;padding:14px 32px;border-radius:50px;font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;text-decoration:none;cursor:pointer;border:none;background:${G};color:white;box-shadow:0 4px 20px rgba(255,107,0,0.3);transition:transform .2s,box-shadow .2s; }
-        .lp-btn-primary:hover { transform:translateY(-2px);box-shadow:0 8px 32px rgba(255,107,0,0.45); }
-        .lp-btn-ghost { display:inline-flex;align-items:center;gap:8px;padding:13px 28px;border-radius:50px;font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;text-decoration:none;background:transparent;color:#FF6B00;border:2px solid #FF6B00;transition:background .2s; }
-        .lp-btn-ghost:hover { background:#FFF3E6; }
-        .lp-btn-white { display:inline-flex;align-items:center;gap:8px;padding:14px 28px;border-radius:50px;font-family:'Poppins',sans-serif;font-weight:700;font-size:15px;text-decoration:none;background:white;color:#FF6B00;box-shadow:0 2px 16px rgba(0,0,0,.1);transition:box-shadow .2s,transform .2s; }
-        .lp-btn-white:hover { transform:translateY(-2px);box-shadow:0 6px 28px rgba(0,0,0,.15); }
-        .lp-card-hover { transition:transform .3s,box-shadow .3s; }
-        .lp-card-hover:hover { transform:translateY(-6px); }
-        .lp-feat-card { display:flex;gap:18px;align-items:flex-start;background:#F9FAFB;border-radius:20px;padding:26px 22px;border:1.5px solid transparent;transition:border-color .3s,box-shadow .3s,transform .3s; }
-        .lp-feat-card:hover { border-color:#FED7AA;box-shadow:0 8px 32px rgba(255,107,0,.08);transform:translateY(-3px); }
-        .lp-price-row { display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-radius:16px;background:#F9FAFB;border:1.5px solid #F3F4F6;transition:border-color .2s; }
-        .lp-price-row:hover { border-color:#FDBA74; }
-        .lp-price-row.featured { background:linear-gradient(135deg,#FFF3E6,#FFE8D0);border-color:#FED7AA; }
-        .lp-testi-card { background:#F9FAFB;border-radius:24px;padding:28px;border:1.5px solid #F3F4F6;transition:transform .3s,box-shadow .3s; }
-        .lp-testi-card:hover { transform:translateY(-4px);box-shadow:0 8px 32px rgba(0,0,0,.08); }
-        .wa-fab { position:fixed;bottom:28px;right:28px;z-index:500;width:62px;height:62px;border-radius:50%;background:#25D366;text-decoration:none;display:flex;align-items:center;justify-content:center;font-size:28px;box-shadow:0 8px 32px rgba(37,211,102,.5);transition:transform .2s; }
-        .wa-fab:hover { transform:scale(1.1); }
-        .phone-float { animation:phoneFloat 4s ease-in-out infinite; }
-        @keyframes phoneFloat { 0%,100% { transform:translateY(0) rotate(-2deg); } 50% { transform:translateY(-12px) rotate(-2deg); } }
-        .badge-float { animation:badgeFloat 3s ease-in-out infinite; }
-        @keyframes badgeFloat { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-6px); } }
-        .fc1 { animation:fc1 3.5s ease-in-out infinite; }
-        .fc2 { animation:fc2 4s ease-in-out infinite .5s; }
-        .fc3 { animation:fc1 3s ease-in-out infinite 1s; }
-        @keyframes fc1 { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-8px); } }
-        @keyframes fc2 { 0%,100% { transform:translateY(0); } 50% { transform:translateY(8px); } }
-        .live-dot { width:8px;height:8px;border-radius:50%;background:#EF4444;animation:livePulse 1.2s ease-in-out infinite; }
-        @keyframes livePulse { 0%,100% { box-shadow:0 0 0 0 rgba(239,68,68,.6); } 50% { box-shadow:0 0 0 6px rgba(239,68,68,0); } }
-        .ticker-track { display:flex;animation:ticker 22s linear infinite;white-space:nowrap; }
-        @keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
-        .step-card { background:white;border-radius:20px;padding:28px 22px;text-align:center;box-shadow:0 2px 16px rgba(0,0,0,.06);transition:transform .3s,box-shadow .3s; }
-        .step-card:hover { transform:translateY(-4px);box-shadow:0 8px 32px rgba(0,0,0,.1); }
-        .chat-in { animation:chatIn .4s ease forwards; }
-        @keyframes chatIn { from { opacity:0;transform:translateY(8px); } to { opacity:1;transform:translateY(0); } }
-        @media(max-width:768px){
-          .lp-hero-grid { grid-template-columns:1fr!important; }
-          .lp-hero-right { order:-1; }
-          .lp-float-cards { display:none!important; }
-          .lp-plat-grid,.lp-price-grid,.lp-feat-split { grid-template-columns:1fr!important; }
-          .lp-testi-grid { grid-template-columns:1fr!important; }
-          .lp-steps { grid-template-columns:repeat(2,1fr)!important; }
-          .lp-steps::before { display:none!important; }
-          .lp-section { padding:60px 20px!important; }
-          .lp-nav { padding:12px 20px!important; }
-          .lp-nav-links a:not(.lp-btn-primary) { display:none!important; }
-          .lp-hero { padding:90px 20px 60px!important; }
-          .lp-cta-section { padding:72px 20px!important; }
-          .lp-promo-callout { flex-direction:column!important;text-align:center!important; }
-          footer { flex-direction:column!important;align-items:center!important;text-align:center!important;padding:28px 20px!important; }
+        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+        :root { --black:#0C0C0C; --black2:#141414; --paper:#F0EDE6; --orange:#FF4D00; --yellow:#FFD600; --muted:rgba(240,237,230,0.38); --border:rgba(240,237,230,0.08); }
+        a { text-decoration:none; color:inherit; }
+        button { border:none; background:none; font-family:inherit; cursor:${isDesktop ? 'none' : 'pointer'}; }
+        .live-dot-l { width:8px;height:8px;border-radius:50%;background:#EF4444;animation:livePulse 1.5s ease-in-out infinite; }
+        @keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.7);} 70%{box-shadow:0 0 0 10px rgba(239,68,68,0);} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0);} }
+        .word-wrap-l { overflow:hidden; display:inline-block; vertical-align:top; }
+        .word-l { display:inline-block; transition:transform 1s cubic-bezier(0.16,1,0.3,1); }
+        .btn-pri-l { font-family:'Syne',sans-serif;font-size:15px;font-weight:700;letter-spacing:.04em;background:var(--orange);color:white;padding:16px 36px;border-radius:2px;display:inline-flex;align-items:center;gap:12px;transition:background .2s,transform .2s,box-shadow .2s; }
+        .btn-pri-l:hover { background:#e64400;transform:translateY(-2px);box-shadow:0 16px 48px rgba(255,77,0,.35); }
+        .btn-ghost-l { font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:8px;transition:color .2s; }
+        .btn-ghost-l:hover { color:var(--paper); }
+        .nav-link-l { font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);transition:color .2s;position:relative; }
+        .nav-link-l::after { content:'';position:absolute;bottom:-3px;left:0;right:0;height:1px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform .3s cubic-bezier(.23,1,.32,1); }
+        .nav-link-l:hover { color:var(--paper); }
+        .nav-link-l:hover::after { transform:scaleX(1); }
+        .nav-cta-pill-l { font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:var(--orange);color:white;padding:11px 26px;border-radius:100px;transition:background .25s,transform .2s;display:inline-block; }
+        .nav-cta-pill-l:hover { background:#e64400;transform:scale(1.03); }
+        .marquee-track-l { display:flex;width:max-content;animation:marqueeScroll 28s linear infinite; }
+        .marquee-track-l.rev { animation-direction:reverse;animation-duration:22s; }
+        @keyframes marqueeScroll { from{transform:translateX(0);} to{transform:translateX(-50%);} }
+        .marquee-item-l { display:flex;align-items:center;gap:20px;padding:0 36px;font-family:'Syne',sans-serif;font-size:14px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap;flex-shrink:0; }
+        .service-item-l:hover .service-bg-l { opacity:1; }
+        .service-item-l:hover .service-arrow-l { transform:rotate(45deg);border-color:var(--orange);background:var(--orange); }
+        .service-item-l:hover .service-body-l { max-height:200px;padding-bottom:36px; }
+        .service-item-l:hover .service-head-l { padding:36px 0; }
+        .service-bg-l { position:absolute;inset:0;opacity:0;transition:opacity .5s cubic-bezier(.23,1,.32,1);pointer-events:none; }
+        .service-arrow-l { width:48px;height:48px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;transition:transform .4s cubic-bezier(.23,1,.32,1),border-color .3s,background .3s; }
+        .service-head-l { display:grid;grid-template-columns:60px 1fr auto;align-items:center;gap:24px;padding:32px 0;position:relative;z-index:1;transition:padding .3s; }
+        .service-body-l { display:grid;grid-template-columns:60px 1fr auto;gap:24px;padding:0;position:relative;z-index:1;max-height:0;overflow:hidden;transition:max-height .5s cubic-bezier(.23,1,.32,1),padding .3s; }
+        .stat-cell-l:hover { background:rgba(255,77,0,0.04); }
+        .price-row-l:hover::before { opacity:1; }
+        .price-row-l.featured::before { opacity:1;background:rgba(255,77,0,0.07); }
+        .price-row-bg-l { content:'';position:absolute;left:-48px;right:-48px;top:0;bottom:0;background:rgba(255,77,0,0.04);opacity:0;transition:opacity .25s; }
+        .testi-card-l:hover { border-color:rgba(255,77,0,.3); transform:translateY(-4px); }
+        .testi-btn-l:hover { border-color:var(--orange);color:var(--paper);background:var(--orange); }
+        .footer-link-l:hover { color:var(--orange); }
+        .footer-link-l:hover .arr-l { transform:translate(2px,-2px); }
+        .wa-fab-l:hover { transform:scale(1.1);box-shadow:0 12px 40px rgba(37,211,102,.6); }
+        .testi-track-l::-webkit-scrollbar { display:none; }
+        @media(max-width:1024px){
+          .hero-bottom-l { grid-template-columns:1fr 1fr!important; }
+          .hero-cta-group-l { grid-column:1/-1!important;flex-direction:row!important;align-items:center!important; }
+          .s-header-l { grid-template-columns:140px 1fr!important; }
+          .about-grid-l { grid-template-columns:1fr!important;gap:48px!important; }
+          .cta-inner-l { grid-template-columns:1fr!important; }
+          .cta-right-l { text-align:left!important; }
+          .footer-top-l { grid-template-columns:1fr 1fr!important; }
+          .price-row-l { grid-template-columns:44px 1fr auto!important; }
+          .pr-badge-l { display:none!important; }
+          .pricing-cta-block-l { flex-direction:column!important;align-items:flex-start!important; }
         }
-        @media(max-width:480px){
-          .lp-steps { grid-template-columns:1fr!important; }
-          .lp-feat-grid { grid-template-columns:1fr!important; }
+        @media(max-width:768px){
+          .nav-links-l .nav-link-l { display:none!important; }
+          .hero-h1-l { font-size:clamp(52px,14vw,100px)!important; }
+          .hero-bottom-l { grid-template-columns:1fr!important;gap:24px!important; }
+          .s-header-l { grid-template-columns:1fr!important;gap:16px!important;margin-bottom:48px!important; }
+          .stats-grid-l { grid-template-columns:1fr!important; }
+          .stat-cell-l { border-right:none!important; }
+          .service-head-l { grid-template-columns:40px 1fr auto!important; }
+          .service-body-l { grid-template-columns:40px 1fr!important; }
+          .testi-card-l { min-width:300px!important;max-width:300px!important; }
+          .cta-bg-text-l { display:none!important; }
+          .footer-top-l { grid-template-columns:1fr!important; }
+          .footer-bottom-l { flex-direction:column!important;align-items:flex-start!important; }
         }
       `}</style>
 
+      {/* CURSOR */}
+      {isDesktop && (
+        <>
+          <div ref={cursorRef} style={{
+            position: 'fixed', width: cursorMode === 'cta' ? 80 : cursorMode === 'hover' ? 60 : 10,
+            height: cursorMode === 'cta' ? 80 : cursorMode === 'hover' ? 60 : 10,
+            background: cursorMode !== 'default' ? '#FF4D00' : '#F0EDE6',
+            borderRadius: '50%', pointerEvents: 'none', zIndex: 9999, transform: 'translate(-50%,-50%)',
+            transition: 'width .3s cubic-bezier(.23,1,.32,1), height .3s cubic-bezier(.23,1,.32,1), background .3s',
+            mixBlendMode: 'difference',
+          }} />
+          <div ref={ringRef} style={{
+            position: 'fixed', width: cursorMode === 'hover' ? 72 : 40, height: cursorMode === 'hover' ? 72 : 40,
+            border: '1px solid rgba(240,237,230,0.4)', borderRadius: '50%', pointerEvents: 'none', zIndex: 9998,
+            transform: 'translate(-50%,-50%)', opacity: cursorMode !== 'default' ? 0 : 1,
+            transition: 'width .35s cubic-bezier(.23,1,.32,1), height .35s cubic-bezier(.23,1,.32,1), opacity .3s',
+          }} />
+          <div ref={labelRef} style={{
+            position: 'fixed', pointerEvents: 'none', zIndex: 9997, fontFamily: 'Space Mono, monospace', fontSize: 10,
+            letterSpacing: '.14em', textTransform: 'uppercase', color: '#F0EDE6', whiteSpace: 'nowrap',
+            opacity: cursorMode === 'hover' ? 1 : 0, transform: 'translate(-50%, 28px)', transition: 'opacity .2s',
+          }}>Lihat</div>
+        </>
+      )}
+
       {/* WA FAB */}
-      <a href={wa('Halo Iranza Live, saya ingin info lebih lanjut')} className="wa-fab" target="_blank" rel="noopener">💬</a>
+      <a href={wa('Halo Iranza Live')} className="wa-fab-l" target="_blank" rel="noopener" data-cursor-cta="true" style={{
+        position: 'fixed', bottom: 28, right: 28, zIndex: 800, width: 56, height: 56, borderRadius: '50%',
+        background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
+        boxShadow: '0 8px 32px rgba(37,211,102,0.45)', transition: 'transform .2s, box-shadow .2s',
+      }}>💬</a>
 
       {/* NAV */}
-      <nav className="lp-nav" style={{ position:'fixed',top:0,left:0,right:0,zIndex:200,display:'flex',alignItems:'center',justifyContent:'space-between',padding:'14px 48px',background:'rgba(255,255,255,0.92)',backdropFilter:'blur(12px)',borderBottom:'1px solid rgba(0,0,0,.06)',transition:'box-shadow .3s',boxShadow:scrolled?'0 2px 20px rgba(0,0,0,.08)':'none' }}>
-        <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height:40 }} onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
-        <div className="lp-nav-links" style={{ display:'flex',alignItems:'center',gap:8 }}>
-          {[['#platform','Platform'],['#cara-kerja','Cara Kerja'],['#harga','Harga']].map(([href,label]) => (
-            <a key={href} href={href} style={{ color:'#6B7280',fontSize:14,fontWeight:500,textDecoration:'none',padding:'8px 14px',borderRadius:8,transition:'color .2s' }}
-              onMouseEnter={e => (e.currentTarget.style.color='#FF6B00')}
-              onMouseLeave={e => (e.currentTarget.style.color='#6B7280')}
-            >{label}</a>
+      <nav style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
+        padding: scrolled ? '16px 48px' : '24px 48px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: scrolled ? 'rgba(12,12,12,0.92)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(16px)' : 'none',
+        borderBottom: scrolled ? '1px solid rgba(240,237,230,0.08)' : 'none',
+        transition: 'padding .4s, background .4s, border-bottom .4s',
+      }}>
+        <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height: 36 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+        <div className="nav-links-l" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
+          {[['#services', 'Services'], ['#about', 'About'], ['#pricing', 'Pricing'], ['#testi', 'Reviews']].map(([href, label]) => (
+            <a key={href} href={href} className="nav-link-l">{label}</a>
           ))}
-          <a href={wa('Halo Iranza Live, mau tanya dulu')} className="lp-btn-ghost" target="_blank" style={{ padding:'8px 18px',fontSize:13 }}>Tanya Dulu</a>
-          <a href={wa('Halo Iranza Live, mau booking sekarang')} className="lp-btn-primary" target="_blank" style={{ padding:'10px 22px',fontSize:13 }}>⚡ Book Sekarang</a>
-          <Link to="/login" style={{ color:'rgba(0,0,0,.25)',fontSize:12,textDecoration:'none',marginLeft:4 }}>Admin →</Link>
+          <a href={wa('Halo Iranza Live, mau booking')} className="nav-cta-pill-l" target="_blank" data-cursor-cta="true">Become a Client</a>
         </div>
       </nav>
 
       {/* HERO */}
-      <section className="lp-hero" style={{ minHeight:'100vh',background:'#FFFBF5',position:'relative',overflow:'hidden',display:'flex',alignItems:'center',padding:'110px 48px 80px' }}>
-        {/* Blobs */}
-        <div style={{ position:'absolute',width:500,height:500,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,184,0,.18) 0%,transparent 70%)',top:-100,right:-80,pointerEvents:'none' }} />
-        <div style={{ position:'absolute',width:350,height:350,borderRadius:'50%',background:'radial-gradient(circle,rgba(255,61,122,.1) 0%,transparent 70%)',bottom:0,left:'20%',pointerEvents:'none' }} />
+      <section style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 48px', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+        <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: 'linear-gradient(rgba(240,237,230,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(240,237,230,0.08) 1px, transparent 1px)', backgroundSize: '80px 80px', WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%)', maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%)' }} />
+        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,77,0,.15) 0%, transparent 65%)', top: -120, right: -80, pointerEvents: 'none', animation: 'orbPulse 6s ease-in-out infinite' }} />
+        <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,214,0,.07) 0%, transparent 70%)', bottom: 100, left: -60, pointerEvents: 'none', animation: 'orbPulse 6s ease-in-out infinite -3s' }} />
+        <style>{`@keyframes orbPulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.08);opacity:.7;} }`}</style>
 
-        <div className="lp-hero-grid" style={{ maxWidth:1200,margin:'0 auto',width:'100%',display:'grid',gridTemplateColumns:'1fr 1fr',gap:60,alignItems:'center',position:'relative',zIndex:1 }}>
-          {/* LEFT */}
-          <div>
-            <div className="badge-float" style={{ display:'inline-flex',alignItems:'center',gap:8,background:'white',borderRadius:50,padding:'8px 18px',fontSize:13,fontWeight:700,color:'#FF6B00',boxShadow:'0 2px 12px rgba(255,107,0,.15)',marginBottom:24 }}>
-              <span className="live-dot" /><span>🔴 LIVE PROFESIONAL · HASIL MAKSIMAL</span>
-            </div>
-            <h1 style={{ fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:'clamp(34px,4.5vw,56px)',lineHeight:1.1,color:'#111827',marginBottom:20 }}>
-              {s.tagline.includes('Streaming') ? (
-                <>Jualan Makin Laris<br /><span style={GText}>Lewat Live Streaming</span></>
-              ) : (
-                <span style={GText}>{s.tagline}</span>
-              )}
-            </h1>
-            <p style={{ fontSize:17,lineHeight:1.7,color:'#6B7280',marginBottom:36,maxWidth:480 }}>{s.subtagline}</p>
-            <div style={{ display:'flex',gap:12,flexWrap:'wrap',marginBottom:40 }}>
-              <a href={wa('Halo Iranza Live, mau booking live streaming')} className="lp-btn-primary" target="_blank">⚡ Booking Sekarang</a>
-              <a href="#harga" className="lp-btn-ghost">Lihat Harga</a>
-            </div>
-            <div style={{ display:'flex',alignItems:'center',gap:12,fontSize:13,color:'#6B7280',fontWeight:500 }}>
-              <div style={{ display:'flex' }}>
-                {['🧕','👩','👨','🧑','👩'].map((em,i) => (
-                  <span key={i} style={{ width:32,height:32,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,border:'2px solid white',marginLeft:i===0?0:-8,background:'linear-gradient(135deg,#FFF3D6,#FFE4CC)',flexShrink:0 }}>{em}</span>
-                ))}
-              </div>
-              <span><strong style={{ color:'#111827' }}>50+ seller</strong> sudah dipercayakan ke kami</span>
-            </div>
-          </div>
-
-          {/* RIGHT — Phone Mockup */}
-          <div className="lp-hero-right" style={{ display:'flex',justifyContent:'center',alignItems:'center',position:'relative' }}>
-            <div className="phone-float" style={{ width:256,background:'#111',borderRadius:40,padding:12,boxShadow:'0 30px 80px rgba(0,0,0,.25),0 0 0 1px rgba(255,255,255,.05)',position:'relative',zIndex:2 }}>
-              <div style={{ background:'linear-gradient(160deg,#1a1a2e,#16213e)',borderRadius:32,overflow:'hidden',aspectRatio:'9/16',display:'flex',flexDirection:'column' }}>
-                {/* Screen Top */}
-                <div style={{ background:G,padding:16,display:'flex',alignItems:'center',justifyContent:'space-between' }}>
-                  <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-                    <span style={{ background:'#EF4444',color:'white',fontSize:10,fontWeight:800,letterSpacing:1,padding:'3px 8px',borderRadius:50,display:'inline-flex',alignItems:'center',gap:4 }}>
-                      <span style={{ width:5,height:5,background:'white',borderRadius:'50%',display:'inline-block' }} /> LIVE
-                    </span>
-                    <span style={{ color:'rgba(255,255,255,.9)',fontSize:11,fontWeight:700 }}>@tokoku_official</span>
-                  </div>
-                  <span style={{ color:'rgba(255,255,255,.9)',fontSize:11,fontWeight:600 }}>👁️ 1.2K</span>
-                </div>
-                {/* Feed */}
-                <div style={{ flex:1,padding:'12px',display:'flex',flexDirection:'column',gap:6,overflow:'hidden' }}>
-                  {/* Product card */}
-                  <div style={{ background:'rgba(255,255,255,.06)',borderRadius:10,padding:10,display:'flex',alignItems:'center',gap:8 }}>
-                    <div style={{ width:40,height:40,borderRadius:8,background:G,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18 }}>👕</div>
-                    <div>
-                      <div style={{ color:'white',fontSize:11,fontWeight:700 }}>Kaos Premium Polos</div>
-                      <div style={{ color:'#FFB800',fontSize:12,fontWeight:800 }}>Rp 89.000</div>
-                    </div>
-                  </div>
-                  {/* Chats */}
-                  <div style={{ display:'flex',flexDirection:'column',gap:5,marginTop:4 }}>
-                    {CHATS.map((c, i) => (
-                      <div key={i} className={visibleChats.includes(i) ? 'chat-in' : ''} style={{ display:'flex',alignItems:'center',gap:6,opacity:visibleChats.includes(i)?1:0 }}>
-                        <div style={{ width:22,height:22,borderRadius:'50%',background:c.color,flexShrink:0,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12 }}>{c.avatar}</div>
-                        <span style={{ fontSize:10,color:'rgba(255,255,255,.7)' }}><strong style={{ color:'white' }}>{c.user}</strong> {c.msg}</span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-                {/* Bottom */}
-                <div style={{ padding:'10px 12px',background:'rgba(0,0,0,.3)',display:'flex',gap:6,alignItems:'center' }}>
-                  <div style={{ flex:1,background:'rgba(255,255,255,.1)',borderRadius:50,padding:'6px 12px',fontSize:10,color:'rgba(255,255,255,.5)' }}>Tulis komentar...</div>
-                  <div style={{ width:28,height:28,borderRadius:'50%',background:G,display:'flex',alignItems:'center',justifyContent:'center',fontSize:12 }}>➤</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Float Cards */}
-            <div className="lp-float-cards">
-              {[
-                { cls:'fc1', style:{ top:'15%',left:-65 }, icon:'🛒', label:'Penjualan Hari Ini', value:'+Rp 2.4jt', valueColor:'#10B981' },
-                { cls:'fc2', style:{ bottom:'20%',right:-60 }, icon:'👁️', label:'Peak Viewers', value:'1.847', valueColor:'#FF6B00' },
-                { cls:'fc3', style:{ top:'55%',left:-55 }, icon:'⭐', label:'Rating Kepuasan', value:'4.9 / 5', valueColor:'#111827' },
-              ].map((fc, i) => (
-                <div key={i} className={fc.cls} style={{ position:'absolute',background:'white',borderRadius:16,padding:'12px 16px',boxShadow:'0 8px 32px rgba(0,0,0,.12)',zIndex:3, ...fc.style }}>
-                  <div style={{ fontSize:20,marginBottom:4 }}>{fc.icon}</div>
-                  <div style={{ fontSize:10,color:'#6B7280',fontWeight:600,marginBottom:2 }}>{fc.label}</div>
-                  <div style={{ fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:18,color:fc.valueColor }}>{fc.value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: '#FF4D00', marginBottom: 24 }}>
+          <span className="live-dot-l" />
+          Iranza Live &nbsp;—&nbsp; Jakarta, Indonesia &nbsp;—&nbsp; Est. 2025
         </div>
 
-        {/* Wave divider */}
-        <div style={{ position:'absolute',bottom:-2,left:0,right:0,lineHeight:0 }}>
-          <svg viewBox="0 0 1440 80" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="none" style={{ width:'100%' }}>
-            <path d="M0,40 C240,80 480,0 720,40 C960,80 1200,0 1440,40 L1440,80 L0,80 Z" fill="#FF6B00" opacity="0.07"/>
-            <path d="M0,55 C360,15 720,80 1080,45 C1260,28 1380,60 1440,55 L1440,80 L0,80 Z" fill="#FFB800" opacity="0.05"/>
-          </svg>
+        <h1 className="hero-h1-l" style={{ position: 'relative', zIndex: 1, fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(72px,12vw,160px)', lineHeight: 0.9, letterSpacing: '-0.03em', color: '#F0EDE6', marginBottom: 40 }}>
+          {HERO_WORDS.map((w, i) => (
+            <span key={i}>
+              <span className="word-wrap-l">
+                <span className="word-l" style={{
+                  transform: visible.has('hero') ? 'translateY(0)' : 'translateY(110%)',
+                  transitionDelay: `${0.2 + i * 0.12}s`,
+                  color: w.orange ? '#FF4D00' : w.italic ? 'transparent' : '#F0EDE6',
+                  fontStyle: w.italic ? 'italic' : 'normal',
+                  WebkitTextStroke: w.italic ? '2px #F0EDE6' : 'none',
+                }} data-reveal-id="hero" data-reveal-delay="0">{w.text}</span>
+              </span>
+              {w.br ? <br /> : i < HERO_WORDS.length - 1 && '\u00A0'}
+            </span>
+          ))}
+        </h1>
+
+        <div className="hero-bottom-l" style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32, alignItems: 'end', paddingTop: 40, borderTop: '1px solid rgba(240,237,230,0.08)' }}>
+          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--muted)' }}>
+            Jasa live streaming profesional untuk <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>UMKM Indonesia</strong> di <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>Shopee</strong> &amp; <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>TikTok Shop</strong>. Host terlatih, studio siap, strategi terbukti.
+          </p>
+          <div style={{ display: 'flex', gap: 40 }}>
+            {[['50', '+', '#FF4D00', 'Seller Aktif'], ['4.9', '★', '#FFD600', 'Rating'], ['2', 'H', '#FF4D00', 'Per Sesi']].map(([num, sup, color, label], i) => (
+              <div key={i}>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 36, fontWeight: 800, color: '#F0EDE6', letterSpacing: '-0.02em' }}>{num}<span style={{ color }}>{sup}</span></div>
+                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 6 }}>{label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="hero-cta-group-l" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
+            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="btn-pri-l" target="_blank" data-cursor-cta="true">Mulai Sekarang <span>→</span></a>
+            <a href="#pricing" className="btn-ghost-l">Lihat Harga <span>↓</span></a>
+          </div>
         </div>
       </section>
 
-      {/* STATS TICKER */}
-      <div style={{ background:G,padding:'18px 0',overflow:'hidden' }}>
-        <div className="ticker-track">
-          {[...TICKER_ITEMS, ...TICKER_ITEMS].map((item, i) => (
-            <div key={i} style={{ display:'inline-flex',alignItems:'center',gap:10,padding:'0 36px',color:'white',fontFamily:'Poppins,sans-serif',fontWeight:700,fontSize:15,borderRight:'1px solid rgba(255,255,255,.25)',flexShrink:0 }}>
-              {item.num ? <span style={{ fontSize:22 }}>{item.num}</span> : <span>{item.icon}</span>}
-              <span>{item.label}</span>
-            </div>
+      {/* MARQUEE 1 */}
+      <div style={{ overflow: 'hidden', padding: '16px 0', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+        <div className="marquee-track-l">
+          {[...MARQUEE_1, ...MARQUEE_1].map((m, i) => (
+            <div key={i} className="marquee-item-l"><span style={{ color: '#FF4D00', fontSize: 20, lineHeight: 1 }}>●</span> {m}</div>
           ))}
         </div>
       </div>
 
-      {/* PLATFORMS */}
-      <section id="platform" className="lp-section" style={{ padding:'96px 48px',background:'white' }}>
-        <div style={{ maxWidth:1200,margin:'0 auto' }}>
-          <div style={{ textAlign:'center',marginBottom:52 }}>
-            <span style={{ display:'inline-flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,letterSpacing:2.5,textTransform:'uppercase',color:'#FF6B00',marginBottom:12 }}>
-              <span style={{ width:24,height:3,background:G,borderRadius:2,display:'inline-block' }} />Platform
-            </span>
-            <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:'clamp(26px,3.5vw,42px)',lineHeight:1.15,color:'#111827' }}>Tersedia di Dua Platform<br/>Terbesar Indonesia</h2>
-          </div>
-          <div className="lp-plat-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:24 }}>
-            {[
-              { cls:'shopee', icon:'🛒', bg:'linear-gradient(135deg,#FFF7ED,#FFEDD5)', border:'#FED7AA', iconBg:'linear-gradient(135deg,#FF6B00,#FF9A00)', title:'Shopee Live', desc:'Jangkau jutaan pembeli aktif Shopee. Kami optimalkan voucher, flash sale, dan interaksi real-time untuk dorong konversi produk kamu.', tags:['Flash Sale','Voucher Live','Product Pin','Q&A Session'], tagColor:'rgba(255,107,0,.12)', tagText:'#FF6B00' },
-              { cls:'tiktok', icon:'🎵', bg:'linear-gradient(135deg,#F5F3FF,#EDE9FE)', border:'#C4B5FD', iconBg:'linear-gradient(135deg,#7C3AED,#EC4899)', title:'TikTok Shop Live', desc:'Manfaatkan algoritma viral TikTok untuk traffic organik. Konten live yang engaging + strategi closing yang terbukti naik penjualan.', tags:['For You Page','Gift Storm','Product Showcase','Duet Live'], tagColor:'rgba(124,58,237,.12)', tagText:'#7C3AED' },
-            ].map((p, i) => (
-              <div key={i} className="lp-card-hover" style={{ borderRadius:24,padding:'40px 36px',background:p.bg,border:`1.5px solid ${p.border}`,position:'relative',overflow:'hidden' }}>
-                <div style={{ width:64,height:64,borderRadius:20,background:p.iconBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:32,marginBottom:20 }}>{p.icon}</div>
-                <h3 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:24,marginBottom:12,color:'#111827' }}>{p.title}</h3>
-                <p style={{ color:'#6B7280',fontSize:15,lineHeight:1.7,marginBottom:20 }}>{p.desc}</p>
-                <div>{p.tags.map(t => <span key={t} style={{ display:'inline-block',fontSize:12,fontWeight:700,padding:'5px 12px',borderRadius:50,marginRight:6,marginBottom:6,background:p.tagColor,color:p.tagText }}>{t}</span>)}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* HOW IT WORKS */}
-      <section id="cara-kerja" className="lp-section" style={{ padding:'96px 48px',background:'#F9FAFB' }}>
-        <div style={{ maxWidth:1200,margin:'0 auto' }}>
-          <div style={{ textAlign:'center',marginBottom:52 }}>
-            <span style={{ display:'inline-flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,letterSpacing:2.5,textTransform:'uppercase',color:'#FF6B00',marginBottom:12 }}>
-              <span style={{ width:24,height:3,background:G,borderRadius:2,display:'inline-block' }} />Cara Kerja
-            </span>
-            <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:'clamp(26px,3.5vw,42px)',lineHeight:1.15,color:'#111827' }}>Mulai Live Streaming<br/>Cuma 4 Langkah</h2>
-          </div>
-          <div className="lp-steps" style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:24,position:'relative' }}>
-            <div style={{ position:'absolute',top:32,left:'12.5%',right:'12.5%',height:2,background:G,zIndex:0,borderRadius:2 }} />
-            {[
-              { num:'1', icon:'📱', title:'Hubungi Kami', desc:'Chat via WhatsApp, ceritakan produk & jadwal yang diinginkan.' },
-              { num:'2', icon:'📅', title:'Pilih Slot & Paket', desc:'Pilih slot pagi atau malam, platform Shopee, TikTok, atau keduanya.' },
-              { num:'3', icon:'🎬', title:'Kita Live Bareng!', desc:'Host profesional kami mulai live, showcase produk, dan engage audience.' },
-              { num:'4', icon:'📈', title:'Cuan Masuk!', desc:'Order berdatangan, penjualan naik. Kami kirimkan laporan hasil sesi.' },
-            ].map((step, i) => (
-              <div key={i} className="step-card" style={{ position:'relative',zIndex:1 }}>
-                <div style={{ width:52,height:52,borderRadius:'50%',background:G,color:'white',fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:20,display:'flex',alignItems:'center',justifyContent:'center',margin:'0 auto 16px',boxShadow:'0 4px 16px rgba(255,107,0,.3)' }}>{step.num}</div>
-                <div style={{ fontSize:28,marginBottom:12 }}>{step.icon}</div>
-                <h4 style={{ fontFamily:'Poppins,sans-serif',fontWeight:700,fontSize:16,marginBottom:8,color:'#111827' }}>{step.title}</h4>
-                <p style={{ fontSize:13,color:'#6B7280',lineHeight:1.6 }}>{step.desc}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* FEATURES */}
-      <section className="lp-section" style={{ padding:'96px 48px',background:'white' }}>
-        <div style={{ maxWidth:1200,margin:'0 auto' }}>
-          <div className="lp-feat-split" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:64,alignItems:'center' }}>
+      {/* SERVICES */}
+      <section id="services" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)', background: '#141414' }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+          <div className="s-header-l" data-reveal-id="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>01 — Our Services</span>
             <div>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,letterSpacing:2.5,textTransform:'uppercase',color:'#FF6B00',marginBottom:12 }}>
-                <span style={{ width:24,height:3,background:G,borderRadius:2,display:'inline-block' }} />Keunggulan
-              </span>
-              <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:'clamp(26px,3.5vw,42px)',lineHeight:1.15,color:'#111827',marginBottom:16 }}>Kenapa Pilih<br/>Iranza Live?</h2>
-              <p style={{ fontSize:17,color:'#6B7280',lineHeight:1.7,marginBottom:36,maxWidth:400 }}>Bukan sekadar host — kami adalah partner penjualan live streaming yang ikut memikirkan strategi terbaik untuk toko kamu.</p>
-              <a href={wa('Halo Iranza Live, mau konsultasi dulu')} className="lp-btn-primary" target="_blank">💬 Konsultasi Gratis</a>
+              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+                Kami kelola <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>semuanya</span> — kamu fokus produk.
+              </h2>
+              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Sebagai tim yang berdedikasi, kami ciptakan pengalaman live streaming yang memorable, engaging, dan yang paling penting — menghasilkan penjualan.</p>
             </div>
-            <div className="lp-feat-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:16 }}>
-              {s.features.map((f, i) => (
-                <div key={i} className="lp-feat-card">
-                  <div style={{ width:52,height:52,borderRadius:16,background:'linear-gradient(135deg,#FFF3D6,#FFE4CC)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:24,flexShrink:0 }}>{f.icon}</div>
+          </div>
+
+          <div style={{ borderTop: '1px solid rgba(240,237,230,0.08)' }}>
+            {SERVICES.map((sv, i) => (
+              <div key={sv.num} className="service-item-l" data-service-item data-reveal-id={`svc-${i}`} style={{ ...rv(`svc-${i}`), borderBottom: '1px solid rgba(240,237,230,0.08)', overflow: 'hidden', position: 'relative' }}>
+                <div className="service-bg-l" style={{ background: `linear-gradient(90deg, ${sv.bg} 0%, transparent 60%)` }} />
+                <div className="service-head-l">
+                  <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.16em', color: 'var(--muted)' }}>{sv.num}</span>
+                  <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(24px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.02em', color: '#F0EDE6' }}>{sv.name}</span>
+                  <div className="service-arrow-l">→</div>
+                </div>
+                <div className="service-body-l">
+                  <div />
                   <div>
-                    <h4 style={{ fontFamily:'Poppins,sans-serif',fontWeight:700,fontSize:15,marginBottom:6,color:'#111827' }}>{f.title}</h4>
-                    <p style={{ fontSize:13,color:'#6B7280',lineHeight:1.6 }}>{f.desc}</p>
+                    <p style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--muted)' }}>{sv.desc}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
+                      {sv.tags.map(t => <span key={t} style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', border: '1px solid rgba(240,237,230,0.08)', padding: '5px 12px', borderRadius: 100, color: 'var(--muted)' }}>{t}</span>)}
+                    </div>
                   </div>
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* MARQUEE 2 — orange */}
+      <div style={{ overflow: 'hidden', padding: '16px 0', background: '#FF4D00' }}>
+        <div className="marquee-track-l rev">
+          {[...MARQUEE_2, ...MARQUEE_2].map((m, i) => (
+            <div key={i} className="marquee-item-l" style={{ color: 'rgba(255,255,255,0.85)' }}><span style={{ color: 'white', fontSize: 20, lineHeight: 1 }}>★</span> {m}</div>
+          ))}
+        </div>
+      </div>
+
+      {/* ABOUT */}
+      <section id="about" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+          <div className="s-header-l" data-reveal-id="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — About Us</span>
+            <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+              Kami ada untuk <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>hasilkan penjualan</span>, bukan sekadar tampil.
+            </h2>
+          </div>
+
+          <div className="about-grid-l" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start' }}>
+            <div data-reveal-id="about-1" style={rv('about-1')}>
+              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 'clamp(26px,3vw,40px)', lineHeight: 1.35, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+                Toko kamu punya produk bagus.<br />
+                Masalahnya, <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>tidak ada yang tahu.</span><br /><br />
+                Kami ubah itu.
+              </p>
             </div>
+            <div data-reveal-id="about-2" style={rv('about-2')}>
+              <p style={{ fontSize: 16, lineHeight: 1.85, color: 'var(--muted)', marginBottom: 36 }}>
+                Iranza Live adalah jasa live streaming profesional yang dirancang khusus untuk <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>UMKM Indonesia</strong>. Kami menyediakan host terlatih, studio lengkap, dan strategi penjualan berbasis data yang terbukti meningkatkan konversi — di <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>Shopee Live</strong> maupun <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>TikTok Shop</strong>.
+                <br /><br />
+                Kamu fokus di produk dan operasional toko. Kami urus semuanya di depan kamera — dari persiapan, eksekusi live, sampai laporan hasil sesi yang kamu terima setiap selesai.
+              </p>
+              <a href={wa('Halo Iranza Live, mau konsultasi')} className="btn-pri-l" target="_blank" data-cursor-cta="true" style={{ fontSize: 14, padding: '14px 28px' }}>Konsultasi Gratis →</a>
+            </div>
+          </div>
+
+          <div className="stats-grid-l" data-reveal-id="about-stats" style={{ ...rv('about-stats'), display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid rgba(240,237,230,0.08)', marginTop: 80 }}>
+            {[
+              { num: <>{c50}<span style={{ color: '#FF4D00' }}>+</span></>, desc: 'Seller aktif yang sudah percayakan live streaming tokonya ke kami' },
+              { num: c4, desc: 'Slot live tersedia setiap hari — pagi, siang, sore, dan malam' },
+              { num: <>{c2}<span style={{ color: 'var(--muted)', fontSize: '0.55em', letterSpacing: '-.01em' }}>H</span></>, desc: 'Durasi setiap sesi live — cukup untuk dorong awareness dan konversi' },
+              { num: <>4.9<span style={{ color: '#FFD600' }}>★</span></>, desc: 'Rating rata-rata kepuasan seller yang sudah pakai layanan kami' },
+            ].map((st, i) => (
+              <div key={i} className="stat-cell-l" style={{ padding: '44px 40px', borderRight: i % 2 === 0 ? '1px solid rgba(240,237,230,0.08)' : 'none', borderBottom: i < 2 ? '1px solid rgba(240,237,230,0.08)' : 'none', transition: 'background .3s' }}>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(48px,6vw,80px)', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: '#F0EDE6', marginBottom: 12 }}>{st.num}</div>
+                <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--muted)' }}>{st.desc}</p>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
       {/* PRICING */}
-      <section id="harga" className="lp-section" style={{ padding:'96px 48px',background:'linear-gradient(180deg,#FFFBF5 0%,#FFF3E0 100%)' }}>
-        <div style={{ maxWidth:1200,margin:'0 auto' }}>
-          <div style={{ textAlign:'center',marginBottom:52 }}>
-            <span style={{ display:'inline-flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,letterSpacing:2.5,textTransform:'uppercase',color:'#FF6B00',marginBottom:12 }}>
-              <span style={{ width:24,height:3,background:G,borderRadius:2,display:'inline-block' }} />Harga
-            </span>
-            <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:'clamp(26px,3.5vw,42px)',lineHeight:1.15,color:'#111827' }}>Harga Promo Launching 🔥</h2>
-            <p style={{ fontSize:17,color:'#6B7280',marginTop:12 }}>Terbatas hanya <strong style={{ color:'#FF6B00' }}>4 slot per hari</strong>. Book sekarang sebelum penuh!</p>
+      <section id="pricing" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+          <div className="s-header-l" data-reveal-id="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>03 — Pricing</span>
+            <div>
+              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+                Promo Launching. <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>Terbatas.</span>
+              </h2>
+              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Harga ini tidak akan berlaku selamanya. 4 slot per hari, first come first served.</p>
+            </div>
           </div>
 
-          <div className="lp-price-grid" style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:28 }}>
-            {[
-              { timeKey:'pagi', icon:'☀️', label:'Slot Pagi & Siang', headerBg:'linear-gradient(135deg,#FFF9E6,#FFF0C4)', badgeBg:'rgba(255,184,0,.2)', badgeColor:'#D97706', tagline:'PRODUKTIF PAGI, CUAN DATANG LAGI!', taglineColor:'#FF6B00', time:s.slot_pagi_times,
-                rows:[{ plat:'🛒', platBg:'linear-gradient(135deg,#FF6B00,#FF9A00)', name:'Live Shopee', price:s.prices.pagi_shopee },{ plat:'🎵', platBg:'#000', name:'Live TikTok', price:s.prices.pagi_tiktok },{ plat:'🔥', platBg:G, name:'Dual Platform', price:s.prices.pagi_dual, featured:true }] },
-              { timeKey:'malam', icon:'🌙', label:'Slot Sore & Malam', headerBg:'linear-gradient(135deg,#F3EEFF,#E9DCFF)', badgeBg:'rgba(124,58,237,.15)', badgeColor:'#7C3AED', tagline:'MALAM RAMAI, PENJUALAN MENINGKAT!', taglineColor:'#7C3AED', time:s.slot_malam_times,
-                rows:[{ plat:'🛒', platBg:'linear-gradient(135deg,#FF6B00,#FF9A00)', name:'Live Shopee', price:s.prices.malam_shopee },{ plat:'🎵', platBg:'#000', name:'Live TikTok', price:s.prices.malam_tiktok },{ plat:'🔥', platBg:G, name:'Dual Platform', price:s.prices.malam_dual, featured:true }] },
-            ].map((card, ci) => (
-              <div key={ci} className="lp-card-hover" style={{ background:'white',borderRadius:28,overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,.07)' }}>
-                <div style={{ padding:'28px 28px 22px',display:'flex',gap:16,alignItems:'center',background:card.headerBg }}>
-                  <span style={{ fontSize:42 }}>{card.icon}</span>
-                  <div>
-                    <span style={{ display:'inline-block',fontSize:11,fontWeight:800,padding:'4px 12px',borderRadius:50,letterSpacing:.5,textTransform:'uppercase',marginBottom:5,background:card.badgeBg,color:card.badgeColor }}>{card.label}</span>
-                    <div style={{ fontSize:13,color:'#6B7280',fontWeight:500 }}>{card.time}</div>
-                    <div style={{ fontSize:11,fontWeight:700,marginTop:2,color:card.taglineColor }}>{card.tagline}</div>
-                  </div>
-                </div>
-                <div style={{ padding:'20px 24px 28px',display:'flex',flexDirection:'column',gap:12 }}>
-                  {card.rows.map((row, ri) => (
-                    <div key={ri} className={`lp-price-row${row.featured ? ' featured' : ''}`}>
-                      <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-                        <div style={{ width:38,height:38,borderRadius:12,background:row.platBg,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,flexShrink:0 }}>{row.plat}</div>
-                        <div>
-                          <div style={{ fontFamily:'Poppins,sans-serif',fontWeight:700,fontSize:14,color:'#111827' }}>{row.name}</div>
-                          <div style={{ fontSize:12,color:row.featured?'#FF6B00':'#6B7280',fontWeight:row.featured?600:400 }}>Per sesi 2 jam{row.featured?' • Shopee + TikTok':''}</div>
-                        </div>
-                      </div>
-                      <div style={{ fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:22,...GText }}>{row.price}</div>
-                    </div>
-                  ))}
+          {[
+            { icon: '☀️', label: 'Slot Pagi & Siang', time: s.slot_pagi_times, rows: [
+              { icon: '🛒', name: 'Live Shopee', desc: 'Per sesi · 2 jam · 1 host', badge: 'Pagi', price: s.prices.pagi_shopee },
+              { icon: '🎵', name: 'Live TikTok Shop', desc: 'Per sesi · 2 jam · 1 host', badge: 'Pagi', price: s.prices.pagi_tiktok },
+              { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · 2 jam · cover keduanya', badge: 'Best Value', price: s.prices.pagi_dual, featured: true },
+            ]},
+            { icon: '🌙', label: 'Slot Sore & Malam', time: s.slot_malam_times, rows: [
+              { icon: '🛒', name: 'Live Shopee', desc: 'Per sesi · 2 jam · prime time', badge: 'Malam', price: s.prices.malam_shopee },
+              { icon: '🎵', name: 'Live TikTok Shop', desc: 'Per sesi · 2 jam · prime time', badge: 'Malam', price: s.prices.malam_tiktok },
+              { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · 2 jam · prime time', badge: 'Best Value', price: s.prices.malam_dual, featured: true },
+            ]},
+          ].map((slot, si) => (
+            <div key={si} data-reveal-id={`slot-${si}`} style={{ ...rv(`slot-${si}`), marginBottom: 56 }}>
+              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '22px 0', borderTop: '1px solid rgba(240,237,230,0.08)' }}>
+                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700, color: '#F0EDE6', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 14 }}>
+                  {slot.icon}&nbsp; {slot.label}
+                  <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.12em', color: 'var(--muted)', fontWeight: 400 }}>{slot.time}</span>
                 </div>
               </div>
-            ))}
-          </div>
-
-          {/* Promo callout */}
-          <div className="lp-promo-callout" style={{ background:G,borderRadius:24,padding:'28px 36px',marginTop:28,display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:16,boxShadow:'0 8px 32px rgba(255,107,0,.3)' }}>
-            <div style={{ color:'white' }}>
-              <div style={{ fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:22,marginBottom:4 }}>⚡ {s.promo_label}</div>
-              <div style={{ fontSize:14,opacity:.85 }}>Harga spesial ini hanya untuk periode launching. Jangan sampai kehabisan slot!</div>
+              <div style={{ borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+                {slot.rows.map((row, ri) => (
+                  <div key={ri} className={`price-row-l${row.featured ? ' featured' : ''}`} style={{ display: 'grid', gridTemplateColumns: '52px 1fr 120px 100px', alignItems: 'center', gap: 24, padding: '22px 0', borderTop: '1px solid rgba(240,237,230,0.05)', position: 'relative' }}>
+                    <div className="price-row-bg-l" />
+                    <div style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, position: 'relative', zIndex: 1 }}>{row.icon}</div>
+                    <div style={{ position: 'relative', zIndex: 1 }}>
+                      <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 600, color: '#F0EDE6', letterSpacing: '-0.01em' }}>{row.name}</div>
+                      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{row.desc}</div>
+                    </div>
+                    <span className="pr-badge-l" style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: '#FF4D00', border: '1px solid rgba(255,77,0,0.35)', padding: '5px 10px', borderRadius: 2, justifySelf: 'start', position: 'relative', zIndex: 1 }}>{row.badge}</span>
+                    <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, fontWeight: 800, color: '#F0EDE6', letterSpacing: '-0.02em', textAlign: 'right', whiteSpace: 'nowrap', position: 'relative', zIndex: 1 }}>
+                      {row.price}<span style={{ fontSize: 13, fontWeight: 400, fontFamily: 'Space Mono, monospace', color: 'var(--muted)', marginLeft: 2, letterSpacing: '.06em' }}>rb</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
             </div>
-            <a href={wa('Halo Iranza Live, mau book slot promo launching')} className="lp-btn-white" target="_blank">Book via WhatsApp →</a>
+          ))}
+
+          <div className="pricing-cta-block-l" data-reveal-id="price-cta" style={{ ...rv('price-cta'), display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 32, background: '#FF4D00', padding: '32px 44px', borderRadius: 2 }}>
+            <div>
+              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 26, fontWeight: 800, color: 'white', letterSpacing: '-0.01em' }}>⚡ Terbatas 4 Slot Per Hari</div>
+              <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Harga promo launching — book sekarang sebelum slot penuh.</div>
+            </div>
+            <a href={wa('Halo Iranza Live, mau book slot promo!')} target="_blank" data-cursor-cta="true" style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', background: 'white', color: '#FF4D00', padding: '16px 32px', borderRadius: 2, whiteSpace: 'nowrap', display: 'inline-block', transition: 'transform .2s, box-shadow .2s' }}>Book via WhatsApp →</a>
           </div>
         </div>
       </section>
 
       {/* TESTIMONIALS */}
-      {s.testimonials && s.testimonials.length > 0 && (
-        <section className="lp-section" style={{ padding:'96px 48px',background:'white' }}>
-          <div style={{ maxWidth:1200,margin:'0 auto' }}>
-            <div style={{ textAlign:'center',marginBottom:52 }}>
-              <span style={{ display:'inline-flex',alignItems:'center',gap:8,fontSize:12,fontWeight:700,letterSpacing:2.5,textTransform:'uppercase',color:'#FF6B00',marginBottom:12 }}>
-                <span style={{ width:24,height:3,background:G,borderRadius:2,display:'inline-block' }} />Testimoni
-              </span>
-              <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:800,fontSize:'clamp(26px,3.5vw,42px)',lineHeight:1.15,color:'#111827' }}>Kata Mereka yang<br/>Sudah Live Bareng Kami</h2>
+      <section id="testi" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)', background: '#141414' }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+          <div className="s-header-l" data-reveal-id="testi-h" style={{ ...rv('testi-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
+            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>04 — Reviews</span>
+            <div>
+              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+                Dari seller yang sudah <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>buktikan sendiri.</span>
+              </h2>
+              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Kami supply layanan live streaming ke seller di seluruh Indonesia dengan hasil yang terukur.</p>
             </div>
-            <div className="lp-testi-grid" style={{ display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:24 }}>
+          </div>
+
+          <div data-reveal-id="testi-track" style={{ ...rv('testi-track'), overflow: 'hidden', position: 'relative', margin: '0 -48px', padding: '0 48px' }}>
+            <div ref={trackRef} className="testi-track-l" onMouseDown={onTrackDown} onMouseUp={onTrackUp} onMouseLeave={onTrackUp} onMouseMove={onTrackMove}
+              style={{ display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '4px 48px 20px', margin: '0 -48px', cursor: isDesktop ? (draggingRef.current ? 'grabbing' : 'grab') : 'auto' }}>
               {s.testimonials.map((t, i) => (
-                <div key={i} className="lp-testi-card">
-                  <div style={{ color:'#FFB800',fontSize:18,marginBottom:16,letterSpacing:2 }}>★★★★★</div>
-                  <p style={{ fontSize:15,lineHeight:1.7,color:'#374151',marginBottom:20,fontStyle:'italic' }}>"{t.text}"</p>
-                  <div style={{ display:'flex',alignItems:'center',gap:12 }}>
-                    <div style={{ width:44,height:44,borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,background:'linear-gradient(135deg,#FFF3D6,#FFE4CC)',flexShrink:0 }}>{t.icon}</div>
+                <div key={i} className="testi-card-l" style={{ minWidth: 400, maxWidth: 400, background: '#0C0C0C', border: '1px solid rgba(240,237,230,0.08)', borderRadius: 2, padding: '36px 32px', scrollSnapAlign: 'start', flexShrink: 0, transition: 'border-color .3s, transform .3s' }}>
+                  <div style={{ color: '#FFD600', fontSize: 13, letterSpacing: 3, marginBottom: 20 }}>★★★★★</div>
+                  <p style={{ fontSize: 15, lineHeight: 1.8, color: 'rgba(240,237,230,0.6)', fontStyle: 'italic', marginBottom: 28 }}>"{t.text}"</p>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#0C0C0C', border: '1px solid rgba(240,237,230,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>{t.icon}</div>
                     <div>
-                      <div style={{ fontFamily:'Poppins,sans-serif',fontWeight:700,fontSize:14,color:'#111827' }}>{t.name}</div>
-                      <div style={{ fontSize:12,color:'#6B7280' }}>{t.role}</div>
+                      <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 700, color: '#F0EDE6' }}>{t.name}</div>
+                      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{t.role}</div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
+            <div style={{ display: 'flex', gap: 10, marginTop: 32 }}>
+              <button className="testi-btn-l" onClick={() => scrollTesti(-1)} aria-label="Previous" style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--muted)', transition: 'border-color .2s, color .2s, background .2s' }}>←</button>
+              <button className="testi-btn-l" onClick={() => scrollTesti(1)} aria-label="Next" style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--muted)', transition: 'border-color .2s, color .2s, background .2s' }}>→</button>
+            </div>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* CTA */}
-      <section className="lp-cta-section" style={{ background:'#111827',padding:'100px 48px',textAlign:'center',position:'relative',overflow:'hidden' }}>
-        <div style={{ position:'absolute',inset:0,backgroundImage:"url(\"data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Ccircle cx='30' cy='30' r='4' fill='%23FF6B00' fill-opacity='0.04'/%3E%3C/svg%3E\")" }} />
-        <div style={{ position:'relative',zIndex:1,maxWidth:700,margin:'0 auto' }}>
-          <h2 style={{ fontFamily:'Poppins,sans-serif',fontWeight:900,fontSize:'clamp(30px,4vw,50px)',lineHeight:1.15,color:'white',marginBottom:20 }}>
-            Siap Bikin Toko Kamu<br/><span style={GText}>{s.cta_title.replace('Siap Bikin Toko Kamu','').replace('Siap ','') || 'Live & Cuan Optimal?'}</span>
-          </h2>
-          <p style={{ fontSize:18,color:'rgba(255,255,255,.6)',marginBottom:44,lineHeight:1.7 }}>{s.cta_sub}</p>
-          <div style={{ marginBottom:32 }}>
-            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="lp-btn-primary" target="_blank" style={{ fontSize:17,padding:'16px 40px' }}>💬 Chat WhatsApp Sekarang</a>
+      <section style={{ background: '#F0EDE6', padding: '120px 48px', position: 'relative', overflow: 'hidden' }}>
+        <div className="cta-bg-text-l" style={{ position: 'absolute', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(100px,16vw,220px)', letterSpacing: '-0.04em', color: 'rgba(0,0,0,0.04)', whiteSpace: 'nowrap', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', userSelect: 'none', lineHeight: 1 }}>LIVE LIVE LIVE</div>
+        <div className="cta-inner-l" data-reveal-id="cta" style={{ ...rv('cta'), maxWidth: 1240, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr auto', gap: 80, alignItems: 'center', position: 'relative', zIndex: 1 }}>
+          <div>
+            <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(38px,5.5vw,72px)', lineHeight: 1, letterSpacing: '-0.03em', color: '#0C0C0C' }}>
+              Toko kamu bisa<br />lebih <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>ramai dari ini.</span>
+            </h2>
+            <p style={{ marginTop: 20, fontSize: 17, lineHeight: 1.75, color: 'rgba(12,12,12,0.45)', maxWidth: 480 }}>Satu sesi live bisa mengubah hari yang sepi jadi hari yang ramai. Slot terbatas — book sekarang dan rasakan sendiri perbedaannya.</p>
           </div>
-          <a href={`tel:+${s.whatsapp_number}`} style={{ display:'inline-flex',alignItems:'center',gap:12,padding:'16px 32px',borderRadius:16,background:'rgba(255,255,255,.06)',border:'1px solid rgba(255,255,255,.12)',fontFamily:'Poppins,sans-serif',fontSize:20,fontWeight:800,color:'white',textDecoration:'none',transition:'background .2s' }}>
-            📞 {phone}
-          </a>
-          <p style={{ marginTop:20,fontSize:13,color:'rgba(255,255,255,.25)' }}>YUK, LIVE BARENG IRANZA LIVE! • LIVE MAKSIMAL CUAN OPTIMAL!</p>
+          <div className="cta-right-l" style={{ textAlign: 'center', flexShrink: 0 }}>
+            <a href={`tel:+${s.whatsapp_number}`} style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(18px,2.2vw,26px)', fontWeight: 800, letterSpacing: '-0.01em', color: '#0C0C0C', display: 'block', marginBottom: 18 }}>📞 {phone}</a>
+            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} target="_blank" data-cursor-cta="true" style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', background: '#0C0C0C', color: '#F0EDE6', padding: '16px 32px', borderRadius: 2, display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'background .2s, transform .2s' }}>Chat WhatsApp Sekarang →</a>
+          </div>
         </div>
       </section>
 
       {/* FOOTER */}
-      <footer style={{ background:'#0D0D0D',padding:'36px 48px',display:'flex',alignItems:'center',justifyContent:'space-between',flexWrap:'wrap',gap:20 }}>
-        <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height:34 }} onError={e => { (e.target as HTMLImageElement).style.display='none' }} />
-        <p style={{ color:'rgba(255,255,255,.3)',fontSize:13 }}>© 2025 Iranza Live. Jasa Live Streaming Profesional — Shopee & TikTok Shop.</p>
-        <a href={wa('Halo Iranza Live')} target="_blank" style={{ display:'flex',alignItems:'center',gap:8,color:'#25D366',fontSize:14,fontWeight:600,textDecoration:'none' }}>
-          <span style={{ fontSize:20 }}>💚</span> {phone}
-        </a>
+      <footer style={{ background: '#0C0C0C', padding: '0 48px', borderTop: '1px solid rgba(240,237,230,0.08)' }}>
+        <div className="footer-top-l" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 40, padding: '56px 0', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+          <div>
+            <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height: 34, marginBottom: 20 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
+            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--muted)', maxWidth: 260 }}>Jasa live streaming profesional untuk UMKM Indonesia. Shopee &amp; TikTok Shop.</p>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Layanan</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {[['#services', 'Shopee Live'], ['#services', 'TikTok Shop Live'], ['#services', 'Dual Platform'], ['#pricing', 'Harga']].map(([href, label]) => (
+                <a key={label} href={href} className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>{label} <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+              ))}
+            </div>
+          </div>
+          <div>
+            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Kontak</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              <a href={wa('Halo Iranza Live')} target="_blank" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>WhatsApp <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+              <a href="#testi" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>Reviews <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+              <a href="#about" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>About Us <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+            </div>
+          </div>
+        </div>
+        <div className="footer-bottom-l" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 0', flexWrap: 'wrap', gap: 16 }}>
+          <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>© 2025 Iranza Live. All rights reserved.</span>
+          <a href={wa('Halo Iranza Live')} target="_blank" style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: '#25D366', display: 'flex', alignItems: 'center', gap: 8, transition: 'color .2s' }}>💚 {phone}</a>
+        </div>
+        <Link to="/login" style={{ position: 'fixed', bottom: 8, left: 8, fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(240,237,230,0.15)', textTransform: 'uppercase', letterSpacing: '.1em', zIndex: 50 }}>Admin</Link>
       </footer>
     </div>
   )
