@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import { useAppStore } from '@/store/appStore'
 import { useNotificationsRealtime, useStudioRealtime } from '@/hooks/useData'
+import { useTheme } from '@/hooks/useTheme'
 import { cn } from '@/lib/utils'
 import toast from 'react-hot-toast'
 
@@ -31,6 +32,7 @@ const navItems = {
 export default function Layout() {
   const { profile, signOut } = useAuthStore()
   const { sidebarCollapsed, toggleSidebar, notifications, unreadCount, fetchNotifications, markAllRead } = useAppStore()
+  const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const [showNotifs, setShowNotifs] = useState(false)
   const [clock, setClock] = useState('')
@@ -198,6 +200,15 @@ export default function Layout() {
           </div>
 
           <div className="flex items-center gap-3 ml-auto">
+            {/* Theme toggle */}
+            <button
+              onClick={toggleTheme}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-surface2 border border-border rounded-lg text-muted hover:text-text transition-colors text-sm"
+              title={theme === 'dark' ? 'Ganti ke mode terang' : 'Ganti ke mode gelap'}
+            >
+              {theme === 'dark' ? '🌙' : '☀️'}
+            </button>
+
             {/* Notifications */}
             <div className="relative">
               <button
