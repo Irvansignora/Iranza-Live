@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import { useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
+import { useFavicon } from '@/hooks/useFavicon'
 import { ProtectedRoute, PublicOnlyRoute } from '@/components/ProtectedRoute'
 import Layout from '@/components/Layout'
 import LandingPage from '@/pages/LandingPage'
@@ -24,6 +25,11 @@ export default function App() {
   useEffect(() => {
     initialize()
   }, [initialize])
+
+  // Apply the logo set in admin Settings (Logo & Favicon tab) as the
+  // browser favicon, app-wide — falls back to the static /favicon.svg
+  // from index.html if no logo has been uploaded yet.
+  useFavicon()
 
   return (
     <BrowserRouter>
