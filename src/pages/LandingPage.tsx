@@ -203,14 +203,16 @@ function ThreeCanvas() {
     })
 
     // Objects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const objects: Array<{
-      mesh: THREE.Mesh
+      mesh: any
       rx: number; ry: number; rz: number
       ox: number; oy: number
       floatSpeed: number; floatAmp: number; floatOffset: number
     }> = []
 
-    const addObj = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const addObj = (geo: any, mat: any, x: number, y: number, z: number) => {
       const mesh = new THREE.Mesh(geo, mat)
       mesh.position.set(x, y, z)
       scene.add(mesh)
@@ -879,9 +881,8 @@ export default function LandingPage() {
                 data-rid={`svc-${i}`}
                 data-rdelay={`${i * 80}`}
                 style={{ ...rv(`svc-${i}`, i * 80) }}
-                onMouseEnter={() => setActiveService(sv.id)}
-                onMouseLeave={() => setActiveService(null)}
-                {...addCursorTarget('hover')}
+                onMouseEnter={() => { setActiveService(sv.id); setCursorType('hover') }}
+                onMouseLeave={() => { setActiveService(null); setCursorType('default') }}
               >
                 {/* Colored accent line */}
                 <div style={{
@@ -1304,9 +1305,8 @@ export default function LandingPage() {
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 transition: 'background .2s, transform .2s',
               }}
-              onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-3px)'}
-              onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.transform = 'none'}
-              {...addCursorTarget('hover')}
+              onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-3px)'; setCursorType('hover') }}
+              onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.transform = 'none'; setCursorType('default') }}
             >
               Chat WhatsApp Sekarang →
             </a>
