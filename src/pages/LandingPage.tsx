@@ -1,6 +1,19 @@
-import { useEffect, useRef, useState } from 'react'
+/**
+ * LandingPage.tsx — Iranza Live Creative Agency Redesign
+ * Three.js WebGL 3D + Cloudinary hero photos
+ * Clean minimalist + 3D playful elements
+ */
+
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
+import { getCloudinaryThumbnail } from '@/lib/cloudinary'
+
+/* ─── Types ─────────────────────────────────────────── */
+interface HeroPhoto {
+  cloudinary_url: string
+  caption?: string
+}
 
 interface LandingSettings {
   whatsapp_number: string
@@ -11,12 +24,20 @@ interface LandingSettings {
     malam_shopee: string; malam_tiktok: string; malam_dual: string
   }
   testimonials: { icon: string; name: string; role: string; text: string }[]
+  hero_photos: HeroPhoto[]
+  hero_headline_1: string
+  hero_headline_2: string
+  hero_subtext: string
 }
 
 const DEFAULT: LandingSettings = {
   whatsapp_number: '6285776077292',
   slot_pagi_times: '05.00–09.00 · 11.00–14.00 WIB',
   slot_malam_times: '16.00–18.00 · 20.00–02.00 WIB',
+  hero_headline_1: 'Studio Live',
+  hero_headline_2: 'untuk UMKM.',
+  hero_subtext: 'Host profesional. Studio siap. Hasil terukur — di Shopee & TikTok Shop.',
+  hero_photos: [],
   prices: {
     pagi_shopee: '60', pagi_tiktok: '60', pagi_dual: '80',
     malam_shopee: '90', malam_tiktok: '90', malam_dual: '150',
@@ -26,49 +47,58 @@ const DEFAULT: LandingSettings = {
     { icon: '👨', name: 'Budi Santoso', role: 'Elektronik · Dual Platform', text: 'Gua coba dual platform pertama kali, skeptis awalnya. Tapi dalam 2 jam satu sesi, total order dari Shopee dan TikTok lebih dari yang biasanya gua dapet seminggu.' },
     { icon: '👩', name: 'Rina Marlina', role: 'Skincare · TikTok Shop', text: 'Yang bikin gua loyal bukan cuma hasilnya, tapi mereka kirim laporan lengkap setiap sesi — viewers, engagement, konversi. Gua bisa track perkembangan toko gua.' },
     { icon: '🧑', name: 'Ahmad Fauzi', role: 'Makanan & Minuman · Shopee', text: 'Harganya murah tapi kualitasnya jauh di atas ekspektasi. Sudah 2 bulan langganan, omset naik konsisten tiap minggunya. Rekomen banget buat seller yang baru mau coba live.' },
-    { icon: '👩\u200d🦱', name: 'Dewi Lestari', role: 'Pakaian Anak · TikTok Shop', text: 'Slot malamnya mantap, waktu paling ramai pembeli online. Host mereka natural ngobrolnya, ga kaku, dan selalu bisa jawab pertanyaan produk dengan baik dan meyakinkan.' },
+    { icon: '👩‍🦱', name: 'Dewi Lestari', role: 'Pakaian Anak · TikTok Shop', text: 'Slot malamnya mantap, waktu paling ramai pembeli online. Host mereka natural ngobrolnya, ga kaku, dan selalu bisa jawab pertanyaan produk dengan baik dan meyakinkan.' },
   ],
 }
 
-const HERO_WORDS = [
-  { text: 'Kami', italic: false, orange: false },
-  { text: 'Jalankan', italic: true, orange: false, br: true },
-  { text: 'Live', italic: false, orange: true },
-  { text: 'Streaming', italic: false, orange: false, br: true },
-  { text: 'Toko', italic: false, orange: false },
-  { text: 'Kamu.', italic: true, orange: false },
-]
-
-const MARQUEE_1 = ['Live Shopee', 'TikTok Shop Live', 'Dual Platform', 'Host Profesional', 'Promo Launching', '4 Slot Per Hari', 'Kualitas HD', 'Mulai 60rb / Sesi']
-const MARQUEE_2 = ['Live Profesional', 'Hasil Maksimal', 'Slot Pagi & Siang', 'Slot Sore & Malam', 'Promo Launching!', 'Booking Sekarang']
+const MARQUEE_1 = ['Live Shopee', 'TikTok Shop', 'Dual Platform', 'Host Pro', 'Studio HD', '4 Slot/Hari', 'Mulai 60rb']
+const MARQUEE_2 = ['Live Profesional', 'Hasil Maksimal', 'Slot Pagi & Malam', 'Promo Launching!', 'Booking Now']
 
 const SERVICES = [
-  { num: '01', name: 'Shopee Live', bg: 'rgba(255,77,0,0.05)',
-    desc: 'Jangkau jutaan pembeli aktif Shopee. Kami optimalkan voucher, product pin, flash sale, dan interaksi real-time untuk dorong konversi dan pembelian impulsif di setiap sesi.',
-    tags: ['Flash Sale', 'Voucher Live', 'Product Pin', 'Real-time Q&A'] },
-  { num: '02', name: 'TikTok Shop Live', bg: 'rgba(124,58,237,0.06)',
-    desc: 'Algoritma TikTok membawa traffic organik yang tidak bisa dibeli. Kami buat setiap momen live menjadi konten yang engaging — dari hook pembuka sampai closing yang mendorong klik "Beli".',
-    tags: ['For You Page', 'Gift Engagement', 'Viral Hook', 'Product Showcase'] },
-  { num: '03', name: 'Dual Platform', bg: 'rgba(255,214,0,0.05)',
-    desc: 'Satu host, dua platform berjalan bersamaan. Dobel jangkauan, dobel potensi penjualan — dengan efisiensi biaya yang lebih tinggi dibanding booking terpisah.',
-    tags: ['Shopee + TikTok', '2 Jam / Sesi', 'Best Value'] },
+  {
+    id: 'shopee',
+    num: '01',
+    name: 'Shopee Live',
+    tagline: 'Jangkau jutaan pembeli aktif.',
+    desc: 'Kami optimalkan voucher, product pin, flash sale, dan interaksi real-time untuk dorong konversi dan pembelian impulsif di setiap sesi.',
+    color: '#FF4D00',
+    tags: ['Flash Sale', 'Voucher Live', 'Product Pin', 'Real-time Q&A'],
+  },
+  {
+    id: 'tiktok',
+    num: '02',
+    name: 'TikTok Shop Live',
+    tagline: 'Algoritma bekerja untuk kamu.',
+    desc: 'Kami buat setiap momen live menjadi konten yang engaging — dari hook pembuka sampai closing yang mendorong klik "Beli" — organik tanpa bayar iklan.',
+    color: '#7C3AED',
+    tags: ['For You Page', 'Gift Engagement', 'Viral Hook', 'Product Showcase'],
+  },
+  {
+    id: 'dual',
+    num: '03',
+    name: 'Dual Platform',
+    tagline: 'Satu sesi, dua platform.',
+    desc: 'Dobel jangkauan, dobel potensi penjualan — dengan efisiensi biaya yang lebih tinggi dibanding booking terpisah. Best value yang ada.',
+    color: '#FFD600',
+    tags: ['Shopee + TikTok', '2 Jam / Sesi', 'Best Value'],
+  },
 ]
 
+/* ─── Hooks ─────────────────────────────────────────── */
 function useReveal() {
   const [visible, setVisible] = useState<Set<string>>(new Set())
   useEffect(() => {
-    const els = document.querySelectorAll('[data-reveal-id]')
     const obs = new IntersectionObserver(entries => {
       entries.forEach(e => {
         if (e.isIntersecting && e.target instanceof HTMLElement) {
-          const id = e.target.dataset.revealId!
-          const d = parseFloat(e.target.dataset.revealDelay || '0')
-          setTimeout(() => setVisible(prev => new Set([...prev, id])), d * 70)
+          const id = e.target.dataset.rid!
+          const delay = parseFloat(e.target.dataset.rdelay || '0')
+          setTimeout(() => setVisible(p => new Set([...p, id])), delay)
           obs.unobserve(e.target)
         }
       })
-    }, { threshold: 0.07, rootMargin: '0px 0px -30px 0px' })
-    els.forEach(el => obs.observe(el))
+    }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' })
+    document.querySelectorAll('[data-rid]').forEach(el => obs.observe(el))
     return () => obs.disconnect()
   }, [])
   return visible
@@ -78,46 +108,318 @@ function useCountUp(target: number, active: boolean) {
   const [val, setVal] = useState(0)
   useEffect(() => {
     if (!active) return
-    const dur = 1600, step = 16
+    const dur = 1800, step = 16
     const inc = target / (dur / step)
     let cur = 0
-    const timer = setInterval(() => {
+    const t = setInterval(() => {
       cur = Math.min(cur + inc, target)
       setVal(Math.floor(cur))
-      if (cur >= target) clearInterval(timer)
+      if (cur >= target) clearInterval(t)
     }, step)
-    return () => clearInterval(timer)
+    return () => clearInterval(t)
   }, [active, target])
   return val
 }
 
+/* ─── Three.js 3D Canvas ─────────────────────────────── */
+function ThreeCanvas() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    // Dynamically import Three.js
+    const script = document.createElement('script')
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
+    script.onload = () => initThree(canvas)
+    document.head.appendChild(script)
+
+    return () => {
+      document.head.removeChild(script)
+    }
+  }, [])
+
+  function initThree(canvas: HTMLCanvasElement) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const THREE = (window as any).THREE
+    if (!THREE) return
+
+    const W = canvas.offsetWidth
+    const H = canvas.offsetHeight
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    renderer.setSize(W, H)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setClearColor(0x000000, 0)
+
+    const scene = new THREE.Scene()
+    const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
+    camera.position.set(0, 0, 6)
+
+    // Lights
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
+    scene.add(ambientLight)
+
+    const pointLight1 = new THREE.PointLight(0xFF4D00, 2.5, 20)
+    pointLight1.position.set(3, 3, 3)
+    scene.add(pointLight1)
+
+    const pointLight2 = new THREE.PointLight(0x7C3AED, 1.5, 20)
+    pointLight2.position.set(-3, -2, 2)
+    scene.add(pointLight2)
+
+    const pointLight3 = new THREE.PointLight(0xFFD600, 1, 15)
+    pointLight3.position.set(0, -3, 1)
+    scene.add(pointLight3)
+
+    // Materials
+    const matOrange = new THREE.MeshStandardMaterial({
+      color: 0xFF4D00,
+      metalness: 0.7,
+      roughness: 0.2,
+      emissive: 0xFF4D00,
+      emissiveIntensity: 0.1,
+    })
+    const matPurple = new THREE.MeshStandardMaterial({
+      color: 0x7C3AED,
+      metalness: 0.8,
+      roughness: 0.15,
+      emissive: 0x7C3AED,
+      emissiveIntensity: 0.1,
+    })
+    const matGold = new THREE.MeshStandardMaterial({
+      color: 0xFFD600,
+      metalness: 0.9,
+      roughness: 0.1,
+      emissive: 0xFFD600,
+      emissiveIntensity: 0.08,
+    })
+    const matWire = new THREE.MeshBasicMaterial({
+      color: 0xFF4D00,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.15,
+    })
+
+    // Objects
+    const objects: Array<{
+      mesh: THREE.Mesh
+      rx: number; ry: number; rz: number
+      ox: number; oy: number
+      floatSpeed: number; floatAmp: number; floatOffset: number
+    }> = []
+
+    const addObj = (geo: THREE.BufferGeometry, mat: THREE.Material, x: number, y: number, z: number) => {
+      const mesh = new THREE.Mesh(geo, mat)
+      mesh.position.set(x, y, z)
+      scene.add(mesh)
+      objects.push({
+        mesh,
+        rx: (Math.random() - 0.5) * 0.01,
+        ry: (Math.random() - 0.5) * 0.015,
+        rz: (Math.random() - 0.5) * 0.008,
+        ox: x, oy: y,
+        floatSpeed: 0.4 + Math.random() * 0.6,
+        floatAmp: 0.08 + Math.random() * 0.12,
+        floatOffset: Math.random() * Math.PI * 2,
+      })
+      return mesh
+    }
+
+    // Main torus knot — centerpiece
+    addObj(new THREE.TorusKnotGeometry(0.9, 0.28, 120, 16, 2, 3), matOrange, 0, 0.3, 0)
+
+    // Floating icosahedron
+    addObj(new THREE.IcosahedronGeometry(0.5, 1), matPurple, -2.8, 1.2, -1)
+
+    // Floating octahedron
+    addObj(new THREE.OctahedronGeometry(0.4, 0), matGold, 2.6, -0.8, -0.5)
+
+    // Wireframe sphere — background
+    addObj(new THREE.SphereGeometry(1.8, 16, 16), matWire, 0, 0, -2)
+
+    // Small dodecahedrons
+    addObj(new THREE.DodecahedronGeometry(0.22, 0), matOrange, 1.8, 1.8, 0.5)
+    addObj(new THREE.DodecahedronGeometry(0.18, 0), matPurple, -1.6, -1.8, 0.2)
+    addObj(new THREE.DodecahedronGeometry(0.15, 0), matGold, -2.4, 0.3, 0.8)
+
+    // Particle system
+    const particleCount = 120
+    const positions = new Float32Array(particleCount * 3)
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 12
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 8
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 6
+    }
+    const particleGeo = new THREE.BufferGeometry()
+    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+    const particleMat = new THREE.PointsMaterial({
+      color: 0xFF4D00, size: 0.03, transparent: true, opacity: 0.6,
+    })
+    scene.add(new THREE.Points(particleGeo, particleMat))
+
+    // Mouse tracking
+    let mouseX = 0, mouseY = 0
+    const onMouseMove = (e: MouseEvent) => {
+      mouseX = (e.clientX / window.innerWidth - 0.5) * 2
+      mouseY = -(e.clientY / window.innerHeight - 0.5) * 2
+    }
+    window.addEventListener('mousemove', onMouseMove)
+
+    let animId: number
+    const clock = new THREE.Clock()
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate)
+      const t = clock.getElapsedTime()
+
+      // Camera subtle parallax
+      camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.03
+      camera.position.y += (mouseY * 0.3 - camera.position.y) * 0.03
+      camera.lookAt(0, 0, 0)
+
+      // Animate objects
+      objects.forEach(o => {
+        o.mesh.rotation.x += o.rx
+        o.mesh.rotation.y += o.ry
+        o.mesh.rotation.z += o.rz
+        o.mesh.position.y = o.oy + Math.sin(t * o.floatSpeed + o.floatOffset) * o.floatAmp
+      })
+
+      // Pulse light
+      pointLight1.intensity = 2 + Math.sin(t * 1.5) * 0.5
+
+      renderer.render(scene, camera)
+    }
+    animate()
+
+    // Resize handler
+    const onResize = () => {
+      const W2 = canvas.offsetWidth
+      const H2 = canvas.offsetHeight
+      camera.aspect = W2 / H2
+      camera.updateProjectionMatrix()
+      renderer.setSize(W2, H2)
+    }
+    window.addEventListener('resize', onResize)
+
+    // Cleanup stored on canvas element
+    ;(canvas as HTMLCanvasElement & { _threeCleanup?: () => void })._threeCleanup = () => {
+      cancelAnimationFrame(animId)
+      window.removeEventListener('mousemove', onMouseMove)
+      window.removeEventListener('resize', onResize)
+      renderer.dispose()
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      const canvas = canvasRef.current as HTMLCanvasElement & { _threeCleanup?: () => void }
+      canvas?._threeCleanup?.()
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{
+        position: 'absolute',
+        inset: 0,
+        width: '100%',
+        height: '100%',
+        pointerEvents: 'none',
+        zIndex: 0,
+      }}
+    />
+  )
+}
+
+/* ─── Floating Photo Strip ────────────────────────────── */
+function PhotoStrip({ photos }: { photos: HeroPhoto[] }) {
+  if (!photos.length) return null
+
+  const items = [...photos, ...photos, ...photos] // triple for seamless loop
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 0,
+      left: 0,
+      right: 0,
+      height: 200,
+      overflow: 'hidden',
+      zIndex: 2,
+      maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
+      WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
+    }}>
+      <div style={{
+        display: 'flex',
+        gap: 16,
+        animation: 'photoScroll 30s linear infinite',
+        width: 'max-content',
+        height: '100%',
+        alignItems: 'center',
+      }}>
+        {items.map((photo, i) => (
+          <div key={i} style={{
+            width: 160,
+            height: 160,
+            borderRadius: 12,
+            overflow: 'hidden',
+            flexShrink: 0,
+            border: '1px solid rgba(255,77,0,0.2)',
+            transform: i % 2 === 0 ? 'rotate(-2deg)' : 'rotate(1.5deg)',
+            boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
+          }}>
+            <img
+              src={getCloudinaryThumbnail(photo.cloudinary_url, 320, 320)}
+              alt={photo.caption || ''}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+        ))}
+      </div>
+      <style>{`
+        @keyframes photoScroll {
+          from { transform: translateX(0); }
+          to { transform: translateX(calc(-100% / 3)); }
+        }
+      `}</style>
+    </div>
+  )
+}
+
+/* ─── Main Component ─────────────────────────────────── */
 export default function LandingPage() {
   const [s, setS] = useState<LandingSettings>(DEFAULT)
   const [scrolled, setScrolled] = useState(false)
+  const [activeService, setActiveService] = useState<string | null>(null)
   const visible = useReveal()
   const trackRef = useRef<HTMLDivElement>(null)
   const draggingRef = useRef(false)
   const startXRef = useRef(0)
   const scrollLeftRef = useRef(0)
   const cursorRef = useRef<HTMLDivElement>(null)
-  const ringRef = useRef<HTMLDivElement>(null)
-  const labelRef = useRef<HTMLDivElement>(null)
-  const [cursorMode, setCursorMode] = useState<'default' | 'hover' | 'cta'>('default')
+  const cursorRingRef = useRef<HTMLDivElement>(null)
+  const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
 
+  // Load settings from Supabase
   useEffect(() => {
     supabase.from('landing_settings').select('*').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (data?.settings) setS({ ...DEFAULT, ...data.settings }) })
   }, [])
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 60)
-    window.addEventListener('scroll', handler, { passive: true })
-    return () => window.removeEventListener('scroll', handler)
+    setIsDesktop(window.matchMedia('(min-width:769px)').matches)
   }, [])
 
+  // Scroll handler
   useEffect(() => {
-    setIsDesktop(window.matchMedia('(min-width:769px)').matches)
+    const h = () => setScrolled(window.scrollY > 60)
+    window.addEventListener('scroll', h, { passive: true })
+    return () => window.removeEventListener('scroll', h)
   }, [])
 
   // Custom cursor
@@ -127,268 +429,490 @@ export default function LandingPage() {
     const move = (e: MouseEvent) => { mx = e.clientX; my = e.clientY }
     window.addEventListener('mousemove', move)
     const anim = () => {
-      rx += (mx - rx) * 0.12
-      ry += (my - ry) * 0.12
-      if (cursorRef.current) { cursorRef.current.style.left = mx + 'px'; cursorRef.current.style.top = my + 'px' }
-      if (ringRef.current) { ringRef.current.style.left = rx + 'px'; ringRef.current.style.top = ry + 'px' }
-      if (labelRef.current) { labelRef.current.style.left = mx + 'px'; labelRef.current.style.top = my + 'px' }
+      rx += (mx - rx) * 0.11
+      ry += (my - ry) * 0.11
+      if (cursorRef.current) {
+        cursorRef.current.style.left = mx + 'px'
+        cursorRef.current.style.top = my + 'px'
+      }
+      if (cursorRingRef.current) {
+        cursorRingRef.current.style.left = rx + 'px'
+        cursorRingRef.current.style.top = ry + 'px'
+      }
       raf = requestAnimationFrame(anim)
     }
     anim()
     return () => { window.removeEventListener('mousemove', move); cancelAnimationFrame(raf) }
   }, [isDesktop])
 
-  // Pointer enter/leave for interactive elements
-  useEffect(() => {
-    if (!isDesktop) return
-    const els = document.querySelectorAll('a, button, [data-service-item]')
-    const onEnter = (e: Event) => {
-      const el = e.currentTarget as HTMLElement
-      setCursorMode(el.dataset.cursorCta === 'true' ? 'cta' : 'hover')
-    }
-    const onLeave = () => setCursorMode('default')
-    els.forEach(el => { el.addEventListener('mouseenter', onEnter); el.addEventListener('mouseleave', onLeave) })
-    return () => els.forEach(el => { el.removeEventListener('mouseenter', onEnter); el.removeEventListener('mouseleave', onLeave) })
-  }, [isDesktop, s])
-
-  const wa = (msg: string) => `https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(msg)}`
+  const wa = useCallback((msg: string) =>
+    `https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(msg)}`, [s.whatsapp_number])
   const phone = s.whatsapp_number.replace('62', '0').replace(/(\d{4})(\d{4})(\d+)/, '$1-$2-$3')
 
-  const rv = (id: string): React.CSSProperties => ({
+  const rv = (id: string, delay = 0): React.CSSProperties => ({
     opacity: visible.has(id) ? 1 : 0,
-    transform: visible.has(id) ? 'none' : 'translateY(32px)',
-    transition: 'opacity 0.8s cubic-bezier(0.16,1,0.3,1), transform 0.8s cubic-bezier(0.16,1,0.3,1)',
+    transform: visible.has(id) ? 'none' : 'translateY(40px)',
+    transition: `opacity 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
   })
 
-  const statsActive = visible.has('about-stats')
+  const statsActive = visible.has('stats-wrap')
   const c50 = useCountUp(50, statsActive)
   const c4 = useCountUp(4, statsActive)
-  const c2 = useCountUp(2, statsActive)
+  const c49 = useCountUp(49, statsActive)
 
-  const G = '#FF4D00'
+  const addCursorTarget = (type: 'hover' | 'drag') => ({
+    onMouseEnter: () => setCursorType(type),
+    onMouseLeave: () => setCursorType('default'),
+  })
 
-  // testimonial drag
   const onTrackDown = (e: React.MouseEvent) => {
     draggingRef.current = true
     startXRef.current = e.pageX
     scrollLeftRef.current = trackRef.current?.scrollLeft || 0
+    setCursorType('drag')
   }
-  const onTrackUp = () => { draggingRef.current = false }
+  const onTrackUp = () => { draggingRef.current = false; setCursorType('default') }
   const onTrackMove = (e: React.MouseEvent) => {
     if (!draggingRef.current || !trackRef.current) return
     e.preventDefault()
-    const dx = e.pageX - startXRef.current
-    trackRef.current.scrollLeft = scrollLeftRef.current - dx * 1.4
+    trackRef.current.scrollLeft = scrollLeftRef.current - (e.pageX - startXRef.current) * 1.3
   }
-  const scrollTesti = (dir: number) => trackRef.current?.scrollBy({ left: dir * 420, behavior: 'smooth' })
+  const scrollTesti = (dir: number) => trackRef.current?.scrollBy({ left: dir * 440, behavior: 'smooth' })
+
+  const hasPhotos = s.hero_photos && s.hero_photos.length > 0
 
   return (
-    <div style={{ background: '#0C0C0C', color: '#F0EDE6', fontFamily: "'DM Sans', sans-serif", fontWeight: 300, overflowX: 'hidden', WebkitFontSmoothing: 'antialiased', cursor: isDesktop ? 'none' : 'auto' }}>
+    <div style={{
+      background: '#0A0A0A',
+      color: '#F2EFE8',
+      fontFamily: "'DM Sans', sans-serif",
+      fontWeight: 300,
+      overflowX: 'hidden',
+      WebkitFontSmoothing: 'antialiased',
+      cursor: isDesktop ? 'none' : 'auto',
+    }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
-        :root { --black:#0C0C0C; --black2:#141414; --paper:#F0EDE6; --orange:#FF4D00; --yellow:#FFD600; --muted:rgba(240,237,230,0.38); --border:rgba(240,237,230,0.08); }
-        a { text-decoration:none; color:inherit; }
-        button { border:none; background:none; font-family:inherit; cursor:${isDesktop ? 'none' : 'pointer'}; }
-        .live-dot-l { width:8px;height:8px;border-radius:50%;background:#EF4444;animation:livePulse 1.5s ease-in-out infinite; }
-        @keyframes livePulse { 0%{box-shadow:0 0 0 0 rgba(239,68,68,.7);} 70%{box-shadow:0 0 0 10px rgba(239,68,68,0);} 100%{box-shadow:0 0 0 0 rgba(239,68,68,0);} }
-        .word-wrap-l { overflow:hidden; display:inline-block; vertical-align:top; }
-        .word-l { display:inline-block; transition:transform 1s cubic-bezier(0.16,1,0.3,1); }
-        .btn-pri-l { font-family:'Syne',sans-serif;font-size:15px;font-weight:700;letter-spacing:.04em;background:var(--orange);color:white;padding:16px 36px;border-radius:2px;display:inline-flex;align-items:center;gap:12px;transition:background .2s,transform .2s,box-shadow .2s; }
-        .btn-pri-l:hover { background:#e64400;transform:translateY(-2px);box-shadow:0 16px 48px rgba(255,77,0,.35); }
-        .btn-ghost-l { font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);display:inline-flex;align-items:center;gap:8px;transition:color .2s; }
-        .btn-ghost-l:hover { color:var(--paper); }
-        .nav-link-l { font-family:'Space Mono',monospace;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);transition:color .2s;position:relative; }
-        .nav-link-l::after { content:'';position:absolute;bottom:-3px;left:0;right:0;height:1px;background:var(--orange);transform:scaleX(0);transform-origin:left;transition:transform .3s cubic-bezier(.23,1,.32,1); }
-        .nav-link-l:hover { color:var(--paper); }
-        .nav-link-l:hover::after { transform:scaleX(1); }
-        .nav-cta-pill-l { font-family:'Space Mono',monospace;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;background:var(--orange);color:white;padding:11px 26px;border-radius:100px;transition:background .25s,transform .2s;display:inline-block; }
-        .nav-cta-pill-l:hover { background:#e64400;transform:scale(1.03); }
-        .marquee-track-l { display:flex;width:max-content;animation:marqueeScroll 28s linear infinite; }
-        .marquee-track-l.rev { animation-direction:reverse;animation-duration:22s; }
-        @keyframes marqueeScroll { from{transform:translateX(0);} to{transform:translateX(-50%);} }
-        .marquee-item-l { display:flex;align-items:center;gap:20px;padding:0 36px;font-family:'Syne',sans-serif;font-size:14px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);white-space:nowrap;flex-shrink:0; }
-        .service-item-l:hover .service-bg-l { opacity:1; }
-        .service-item-l:hover .service-arrow-l { transform:rotate(45deg);border-color:var(--orange);background:var(--orange); }
-        .service-item-l:hover .service-body-l { max-height:200px;padding-bottom:36px; }
-        .service-item-l:hover .service-head-l { padding:36px 0; }
-        .service-bg-l { position:absolute;inset:0;opacity:0;transition:opacity .5s cubic-bezier(.23,1,.32,1);pointer-events:none; }
-        .service-arrow-l { width:48px;height:48px;border:1px solid var(--border);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;transition:transform .4s cubic-bezier(.23,1,.32,1),border-color .3s,background .3s; }
-        .service-head-l { display:grid;grid-template-columns:60px 1fr auto;align-items:center;gap:24px;padding:32px 0;position:relative;z-index:1;transition:padding .3s; }
-        .service-body-l { display:grid;grid-template-columns:60px 1fr auto;gap:24px;padding:0;position:relative;z-index:1;max-height:0;overflow:hidden;transition:max-height .5s cubic-bezier(.23,1,.32,1),padding .3s; }
-        .stat-cell-l:hover { background:rgba(255,77,0,0.04); }
-        .price-row-l:hover::before { opacity:1; }
-        .price-row-l.featured::before { opacity:1;background:rgba(255,77,0,0.07); }
-        .price-row-bg-l { content:'';position:absolute;left:-48px;right:-48px;top:0;bottom:0;background:rgba(255,77,0,0.04);opacity:0;transition:opacity .25s; }
-        .testi-card-l:hover { border-color:rgba(255,77,0,.3); transform:translateY(-4px); }
-        .testi-btn-l:hover { border-color:var(--orange);color:var(--paper);background:var(--orange); }
-        .footer-link-l:hover { color:var(--orange); }
-        .footer-link-l:hover .arr-l { transform:translate(2px,-2px); }
-        .wa-fab-l:hover { transform:scale(1.1);box-shadow:0 12px 40px rgba(37,211,102,.6); }
-        .testi-track-l::-webkit-scrollbar { display:none; }
-        @media(max-width:1024px){
-          .hero-bottom-l { grid-template-columns:1fr 1fr!important; }
-          .hero-cta-group-l { grid-column:1/-1!important;flex-direction:row!important;align-items:center!important; }
-          .s-header-l { grid-template-columns:140px 1fr!important; }
-          .about-grid-l { grid-template-columns:1fr!important;gap:48px!important; }
-          .cta-inner-l { grid-template-columns:1fr!important; }
-          .cta-right-l { text-align:left!important; }
-          .footer-top-l { grid-template-columns:1fr 1fr!important; }
-          .price-row-l { grid-template-columns:44px 1fr auto!important; }
-          .pr-badge-l { display:none!important; }
-          .pricing-cta-block-l { flex-direction:column!important;align-items:flex-start!important; }
+        @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@300;400;500;700;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+        :root {
+          --ink: #0A0A0A;
+          --ink2: #111111;
+          --paper: #F2EFE8;
+          --orange: #FF4D00;
+          --purple: #7C3AED;
+          --gold: #FFD600;
+          --muted: rgba(242,239,232,0.35);
+          --border: rgba(242,239,232,0.07);
         }
-        @media(max-width:768px){
-          .nav-links-l .nav-link-l { display:none!important; }
-          .hero-h1-l { font-size:clamp(52px,14vw,100px)!important; }
-          .hero-bottom-l { grid-template-columns:1fr!important;gap:24px!important; }
-          .s-header-l { grid-template-columns:1fr!important;gap:16px!important;margin-bottom:48px!important; }
-          .stats-grid-l { grid-template-columns:1fr!important; }
-          .stat-cell-l { border-right:none!important; }
-          .service-head-l { grid-template-columns:40px 1fr auto!important; }
-          .service-body-l { grid-template-columns:40px 1fr!important; }
-          .testi-card-l { min-width:300px!important;max-width:300px!important; }
-          .cta-bg-text-l { display:none!important; }
-          .footer-top-l { grid-template-columns:1fr!important; }
-          .footer-bottom-l { flex-direction:column!important;align-items:flex-start!important; }
+
+        * { box-sizing: border-box; }
+        a { text-decoration: none; color: inherit; }
+        button { border: none; background: none; font-family: inherit; cursor: ${isDesktop ? 'none' : 'pointer'}; }
+
+        .cabinet { font-family: 'Cabinet Grotesk', sans-serif; }
+        .mono { font-family: 'Space Mono', monospace; }
+
+        .il-btn-pri {
+          font-family: 'Cabinet Grotesk', sans-serif;
+          font-size: 15px; font-weight: 800; letter-spacing: .02em;
+          background: var(--orange); color: white;
+          padding: 16px 36px; border-radius: 3px;
+          display: inline-flex; align-items: center; gap: 10px;
+          transition: transform .2s cubic-bezier(.23,1,.32,1), box-shadow .2s;
+        }
+        .il-btn-pri:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 20px 56px rgba(255,77,0,.4); }
+
+        .il-btn-ghost {
+          font-family: 'Space Mono', monospace;
+          font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+          color: var(--muted);
+          display: inline-flex; align-items: center; gap: 8px;
+          transition: color .2s;
+        }
+        .il-btn-ghost:hover { color: var(--paper); }
+
+        .il-nav-link {
+          font-family: 'Space Mono', monospace;
+          font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
+          color: var(--muted); position: relative;
+          transition: color .2s;
+        }
+        .il-nav-link::after {
+          content: ''; position: absolute;
+          bottom: -3px; left: 0; right: 0; height: 1px;
+          background: var(--orange);
+          transform: scaleX(0); transform-origin: left;
+          transition: transform .3s cubic-bezier(.23,1,.32,1);
+        }
+        .il-nav-link:hover { color: var(--paper); }
+        .il-nav-link:hover::after { transform: scaleX(1); }
+
+        .il-pill {
+          font-family: 'Space Mono', monospace;
+          font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
+          background: var(--orange); color: white;
+          padding: 11px 26px; border-radius: 100px;
+          transition: background .25s, transform .2s;
+          display: inline-block;
+        }
+        .il-pill:hover { background: #e64400; transform: scale(1.03); }
+
+        .il-live-dot {
+          width: 7px; height: 7px; border-radius: 50%;
+          background: #EF4444;
+          animation: il-pulse 1.5s ease-in-out infinite;
+        }
+        @keyframes il-pulse {
+          0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); }
+          70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
+          100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
+        }
+
+        .il-marquee { display: flex; width: max-content; animation: il-scroll 28s linear infinite; }
+        .il-marquee.rev { animation-direction: reverse; animation-duration: 22s; }
+        @keyframes il-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+        .il-marquee-item {
+          display: flex; align-items: center; gap: 18px;
+          padding: 0 32px;
+          font-family: 'Cabinet Grotesk', sans-serif;
+          font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+          color: var(--muted); white-space: nowrap; flex-shrink: 0;
+        }
+
+        .il-svc-row {
+          border-bottom: 1px solid var(--border);
+          position: relative; overflow: hidden;
+          transition: background .4s;
+        }
+        .il-svc-row:hover { background: rgba(255,77,0,0.025); }
+        .il-svc-row:hover .il-svc-num { color: var(--orange); }
+        .il-svc-row:hover .il-svc-arrow { border-color: var(--orange); background: var(--orange); transform: rotate(45deg); }
+        .il-svc-row:hover .il-svc-body { max-height: 220px; padding-bottom: 40px; }
+        .il-svc-row:hover .il-svc-head { padding: 36px 0; }
+
+        .il-svc-head {
+          display: grid; grid-template-columns: 68px 1fr auto;
+          align-items: center; gap: 24px;
+          padding: 30px 0; position: relative; z-index: 1;
+          transition: padding .35s cubic-bezier(.23,1,.32,1);
+        }
+        .il-svc-body {
+          display: grid; grid-template-columns: 68px 1fr;
+          gap: 24px; max-height: 0; overflow: hidden;
+          position: relative; z-index: 1;
+          transition: max-height .55s cubic-bezier(.23,1,.32,1), padding .35s;
+        }
+        .il-svc-num {
+          font-family: 'Space Mono', monospace;
+          font-size: 11px; letter-spacing: .16em;
+          color: var(--muted);
+          transition: color .3s;
+        }
+        .il-svc-arrow {
+          width: 46px; height: 46px;
+          border: 1px solid var(--border); border-radius: 50%;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 18px; color: var(--paper);
+          transition: transform .4s cubic-bezier(.23,1,.32,1), border-color .3s, background .3s;
+        }
+
+        .il-stat { transition: background .3s; }
+        .il-stat:hover { background: rgba(255,77,0,0.03); }
+
+        .il-price-row {
+          display: grid; grid-template-columns: 52px 1fr 100px 110px;
+          align-items: center; gap: 20px;
+          padding: 20px 0;
+          border-top: 1px solid rgba(242,239,232,0.04);
+          position: relative;
+          transition: background .2s;
+        }
+        .il-price-row:hover { background: rgba(255,77,0,0.03); }
+        .il-price-row.feat::after {
+          content: ''; position: absolute;
+          left: -48px; right: -48px; top: 0; bottom: 0;
+          background: rgba(255,77,0,0.05);
+          pointer-events: none;
+        }
+
+        .il-tcard {
+          min-width: 380px; max-width: 380px;
+          background: #111111; border: 1px solid var(--border);
+          border-radius: 4px; padding: 36px 32px; flex-shrink: 0;
+          scroll-snap-align: start;
+          transition: border-color .3s, transform .3s;
+        }
+        .il-tcard:hover { border-color: rgba(255,77,0,.3); transform: translateY(-5px); }
+
+        .il-ttrack::-webkit-scrollbar { display:none; }
+
+        .il-wa-fab {
+          position: fixed; bottom: 28px; right: 28px; z-index: 800;
+          width: 56px; height: 56px; border-radius: 50%;
+          background: #25D366;
+          display: flex; align-items: center; justify-content: center;
+          font-size: 24px;
+          box-shadow: 0 8px 32px rgba(37,211,102,0.45);
+          transition: transform .2s, box-shadow .2s;
+        }
+        .il-wa-fab:hover { transform: scale(1.1); box-shadow: 0 12px 40px rgba(37,211,102,.6); }
+
+        .il-footer-link { transition: color .2s; }
+        .il-footer-link:hover { color: var(--orange); }
+        .il-footer-link:hover .il-arr { transform: translate(2px,-2px); }
+        .il-arr { transition: transform .2s; }
+
+        /* Work/portfolio photo grid */
+        .il-photo-card {
+          border-radius: 8px; overflow: hidden;
+          border: 1px solid var(--border);
+          transition: border-color .3s, transform .4s cubic-bezier(.23,1,.32,1);
+          cursor: pointer;
+        }
+        .il-photo-card:hover { border-color: rgba(255,77,0,.35); transform: scale(1.02) translateY(-4px); }
+        .il-photo-card img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.23,1,.32,1); }
+        .il-photo-card:hover img { transform: scale(1.05); }
+
+        @media (max-width: 1024px) {
+          .il-hero-bottom { grid-template-columns: 1fr 1fr !important; }
+          .il-hero-cta { grid-column: 1/-1 !important; flex-direction: row !important; align-items: center !important; }
+          .il-about-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
+          .il-cta-grid { grid-template-columns: 1fr !important; }
+          .il-footer-grid { grid-template-columns: 1fr 1fr !important; }
+        }
+        @media (max-width: 768px) {
+          .il-hero-h1 { font-size: clamp(52px,15vw,120px) !important; }
+          .il-nav-links .il-nav-link { display: none !important; }
+          .il-hero-bottom { grid-template-columns: 1fr !important; gap: 24px !important; }
+          .il-svc-head { grid-template-columns: 40px 1fr auto !important; }
+          .il-svc-body { grid-template-columns: 40px 1fr !important; }
+          .il-stats-grid { grid-template-columns: 1fr !important; }
+          .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
+          .il-tcard { min-width: 300px !important; max-width: 300px !important; }
+          .il-price-row { grid-template-columns: 44px 1fr auto !important; }
+          .il-pr-badge { display: none !important; }
+          .il-footer-grid { grid-template-columns: 1fr !important; }
+          .il-footer-bottom { flex-direction: column !important; align-items: flex-start !important; }
+          .il-photo-grid { grid-template-columns: 1fr 1fr !important; }
         }
       `}</style>
 
-      {/* CURSOR */}
+      {/* ── CUSTOM CURSOR ── */}
       {isDesktop && (
         <>
           <div ref={cursorRef} style={{
-            position: 'fixed', width: cursorMode === 'cta' ? 80 : cursorMode === 'hover' ? 60 : 10,
-            height: cursorMode === 'cta' ? 80 : cursorMode === 'hover' ? 60 : 10,
-            background: cursorMode !== 'default' ? '#FF4D00' : '#F0EDE6',
-            borderRadius: '50%', pointerEvents: 'none', zIndex: 9999, transform: 'translate(-50%,-50%)',
-            transition: 'width .3s cubic-bezier(.23,1,.32,1), height .3s cubic-bezier(.23,1,.32,1), background .3s',
-            mixBlendMode: 'difference',
+            position: 'fixed', zIndex: 9999, pointerEvents: 'none',
+            width: cursorType === 'drag' ? 48 : cursorType === 'hover' ? 12 : 8,
+            height: cursorType === 'drag' ? 48 : cursorType === 'hover' ? 12 : 8,
+            background: cursorType === 'drag' ? 'transparent' : '#F2EFE8',
+            border: cursorType === 'drag' ? '2px solid rgba(242,239,232,0.5)' : 'none',
+            borderRadius: '50%',
+            transform: 'translate(-50%,-50%)',
+            transition: 'width .3s cubic-bezier(.23,1,.32,1), height .3s, background .3s',
+            mixBlendMode: cursorType === 'drag' ? 'normal' : 'difference',
           }} />
-          <div ref={ringRef} style={{
-            position: 'fixed', width: cursorMode === 'hover' ? 72 : 40, height: cursorMode === 'hover' ? 72 : 40,
-            border: '1px solid rgba(240,237,230,0.4)', borderRadius: '50%', pointerEvents: 'none', zIndex: 9998,
-            transform: 'translate(-50%,-50%)', opacity: cursorMode !== 'default' ? 0 : 1,
-            transition: 'width .35s cubic-bezier(.23,1,.32,1), height .35s cubic-bezier(.23,1,.32,1), opacity .3s',
+          <div ref={cursorRingRef} style={{
+            position: 'fixed', zIndex: 9998, pointerEvents: 'none',
+            width: cursorType === 'hover' ? 48 : 36,
+            height: cursorType === 'hover' ? 48 : 36,
+            border: '1px solid rgba(242,239,232,0.25)',
+            borderRadius: '50%',
+            transform: 'translate(-50%,-50%)',
+            opacity: cursorType === 'drag' ? 0 : 1,
+            transition: 'width .35s cubic-bezier(.23,1,.32,1), height .35s, opacity .25s',
           }} />
-          <div ref={labelRef} style={{
-            position: 'fixed', pointerEvents: 'none', zIndex: 9997, fontFamily: 'Space Mono, monospace', fontSize: 10,
-            letterSpacing: '.14em', textTransform: 'uppercase', color: '#F0EDE6', whiteSpace: 'nowrap',
-            opacity: cursorMode === 'hover' ? 1 : 0, transform: 'translate(-50%, 28px)', transition: 'opacity .2s',
-          }}>Lihat</div>
         </>
       )}
 
-      {/* WA FAB */}
-      <a href={wa('Halo Iranza Live')} className="wa-fab-l" target="_blank" rel="noopener" data-cursor-cta="true" style={{
-        position: 'fixed', bottom: 28, right: 28, zIndex: 800, width: 56, height: 56, borderRadius: '50%',
-        background: '#25D366', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 24,
-        boxShadow: '0 8px 32px rgba(37,211,102,0.45)', transition: 'transform .2s, box-shadow .2s',
-      }}>💬</a>
+      {/* ── WA FAB ── */}
+      <a href={wa('Halo Iranza Live')} className="il-wa-fab" target="_blank" rel="noopener" {...addCursorTarget('hover')}>💬</a>
 
-      {/* NAV */}
+      {/* ── NAVBAR ── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
-        padding: scrolled ? '16px 48px' : '24px 48px',
+        padding: scrolled ? '14px 48px' : '24px 48px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: scrolled ? 'rgba(12,12,12,0.92)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(16px)' : 'none',
-        borderBottom: scrolled ? '1px solid rgba(240,237,230,0.08)' : 'none',
+        background: scrolled ? 'rgba(10,10,10,0.9)' : 'transparent',
+        backdropFilter: scrolled ? 'blur(20px)' : 'none',
+        borderBottom: scrolled ? '1px solid var(--border)' : 'none',
         transition: 'padding .4s, background .4s, border-bottom .4s',
       }}>
-        <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height: 36 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-        <div className="nav-links-l" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
-          {[['#services', 'Services'], ['#about', 'About'], ['#pricing', 'Pricing'], ['#testi', 'Reviews']].map(([href, label]) => (
-            <a key={href} href={href} className="nav-link-l">{label}</a>
+        <div style={{
+          fontFamily: "'Cabinet Grotesk', sans-serif",
+          fontWeight: 900, fontSize: 18, letterSpacing: '-0.01em',
+          color: '#F2EFE8',
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <span className="il-live-dot" />
+          Iranza<span style={{ color: '#FF4D00' }}>Live</span>
+        </div>
+
+        <div className="il-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
+          {[['#services', 'Services'], ['#work', 'Work'], ['#pricing', 'Pricing'], ['#reviews', 'Reviews']].map(([href, label]) => (
+            <a key={href} href={href} className="il-nav-link" {...addCursorTarget('hover')}>{label}</a>
           ))}
-          <a href={wa('Halo Iranza Live, mau booking')} className="nav-cta-pill-l" target="_blank" data-cursor-cta="true">Become a Client</a>
+          <a href={wa('Halo Iranza Live, mau booking')} className="il-pill" target="_blank" {...addCursorTarget('hover')}>
+            Book Now
+          </a>
         </div>
       </nav>
 
-      {/* HERO */}
-      <section style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', justifyContent: 'flex-end', padding: '0 48px 48px', position: 'relative', overflow: 'hidden', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
-        <div style={{ position: 'absolute', inset: 0, zIndex: 0, backgroundImage: 'linear-gradient(rgba(240,237,230,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(240,237,230,0.08) 1px, transparent 1px)', backgroundSize: '80px 80px', WebkitMaskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%)', maskImage: 'radial-gradient(ellipse 80% 80% at 50% 50%, black 30%, transparent 100%)' }} />
-        <div style={{ position: 'absolute', width: 600, height: 600, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,77,0,.15) 0%, transparent 65%)', top: -120, right: -80, pointerEvents: 'none', animation: 'orbPulse 6s ease-in-out infinite' }} />
-        <div style={{ position: 'absolute', width: 400, height: 400, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,214,0,.07) 0%, transparent 70%)', bottom: 100, left: -60, pointerEvents: 'none', animation: 'orbPulse 6s ease-in-out infinite -3s' }} />
-        <style>{`@keyframes orbPulse { 0%,100%{transform:scale(1);opacity:1;} 50%{transform:scale(1.08);opacity:.7;} }`}</style>
+      {/* ══════════════════════════════════════════════
+          HERO
+      ══════════════════════════════════════════════ */}
+      <section style={{
+        minHeight: '100vh',
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        padding: hasPhotos ? '0 48px 240px' : '0 48px 80px',
+        position: 'relative', overflow: 'hidden',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        {/* Three.js canvas */}
+        <ThreeCanvas />
 
-        <div style={{ position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', gap: 12, fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.16em', textTransform: 'uppercase', color: '#FF4D00', marginBottom: 24 }}>
-          <span className="live-dot-l" />
-          Iranza Live &nbsp;—&nbsp; Jakarta, Indonesia &nbsp;—&nbsp; Est. 2025
+        {/* Subtle grid */}
+        <div style={{
+          position: 'absolute', inset: 0, zIndex: 0,
+          backgroundImage: 'linear-gradient(rgba(242,239,232,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(242,239,232,0.04) 1px, transparent 1px)',
+          backgroundSize: '80px 80px',
+          WebkitMaskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%, black 20%, transparent 100%)',
+          maskImage: 'radial-gradient(ellipse 90% 90% at 50% 50%, black 20%, transparent 100%)',
+          pointerEvents: 'none',
+        }} />
+
+        {/* Glow blobs */}
+        <div style={{ position: 'absolute', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,77,0,.1) 0%, transparent 65%)', top: -200, right: -100, pointerEvents: 'none', zIndex: 1 }} />
+        <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,.08) 0%, transparent 70%)', bottom: 100, left: -80, pointerEvents: 'none', zIndex: 1 }} />
+
+        {/* Eyebrow */}
+        <div style={{
+          position: 'relative', zIndex: 3,
+          display: 'flex', alignItems: 'center', gap: 10,
+          fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase',
+          color: '#FF4D00', marginBottom: 28,
+        }}>
+          <span className="il-live-dot" />
+          Iranza Live &nbsp;—&nbsp; Creative Agency &nbsp;—&nbsp; Jakarta, Indonesia
         </div>
 
-        <h1 className="hero-h1-l" style={{ position: 'relative', zIndex: 1, fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(72px,12vw,160px)', lineHeight: 0.9, letterSpacing: '-0.03em', color: '#F0EDE6', marginBottom: 40 }}>
-          {HERO_WORDS.map((w, i) => (
-            <span key={i}>
-              <span className="word-wrap-l">
-                <span className="word-l" style={{
-                  transform: visible.has('hero') ? 'translateY(0)' : 'translateY(110%)',
-                  transitionDelay: `${0.2 + i * 0.12}s`,
-                  color: w.orange ? '#FF4D00' : w.italic ? 'transparent' : '#F0EDE6',
-                  fontStyle: w.italic ? 'italic' : 'normal',
-                  WebkitTextStroke: w.italic ? '2px #F0EDE6' : 'none',
-                }} data-reveal-id="hero" data-reveal-delay="0">{w.text}</span>
-              </span>
-              {w.br ? <br /> : i < HERO_WORDS.length - 1 && '\u00A0'}
-            </span>
-          ))}
+        {/* Headline */}
+        <h1 className="il-hero-h1" style={{
+          position: 'relative', zIndex: 3,
+          fontFamily: "'Cabinet Grotesk', sans-serif",
+          fontWeight: 900,
+          fontSize: 'clamp(64px,11vw,150px)',
+          lineHeight: 0.92, letterSpacing: '-0.03em',
+          color: '#F2EFE8', marginBottom: 48,
+        }}>
+          {s.hero_headline_1}<br />
+          <em style={{ fontStyle: 'italic', color: '#FF4D00', WebkitTextStroke: '0px', fontWeight: 900 }}>{s.hero_headline_2}</em>
         </h1>
 
-        <div className="hero-bottom-l" style={{ position: 'relative', zIndex: 1, display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 32, alignItems: 'end', paddingTop: 40, borderTop: '1px solid rgba(240,237,230,0.08)' }}>
-          <p style={{ fontSize: 16, lineHeight: 1.75, color: 'var(--muted)' }}>
-            Jasa live streaming profesional untuk <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>UMKM Indonesia</strong> di <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>Shopee</strong> &amp; <strong style={{ color: '#F0EDE6', fontWeight: 400 }}>TikTok Shop</strong>. Host terlatih, studio siap, strategi terbukti.
-          </p>
+        {/* Bottom bar */}
+        <div className="il-hero-bottom" style={{
+          position: 'relative', zIndex: 3,
+          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+          gap: 32, alignItems: 'end',
+          paddingTop: 32, borderTop: '1px solid var(--border)',
+        }}>
+          <p style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 320 }}>{s.hero_subtext}</p>
+
           <div style={{ display: 'flex', gap: 40 }}>
-            {[['50', '+', '#FF4D00', 'Seller Aktif'], ['4.9', '★', '#FFD600', 'Rating'], ['2', 'H', '#FF4D00', 'Per Sesi']].map(([num, sup, color, label], i) => (
-              <div key={i}>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 36, fontWeight: 800, color: '#F0EDE6', letterSpacing: '-0.02em' }}>{num}<span style={{ color }}>{sup}</span></div>
-                <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 6 }}>{label}</div>
+            {[['50', '+', '#FF4D00', 'Seller Aktif'], ['4.9', '★', '#FFD600', 'Rating'], ['2', 'J', '#FF4D00', 'Per Sesi']].map(([n, sup, c, label]) => (
+              <div key={label}>
+                <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 38, fontWeight: 900, color: '#F2EFE8', letterSpacing: '-0.02em', lineHeight: 1 }}>
+                  {n}<span style={{ color: c }}>{sup}</span>
+                </div>
+                <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 8 }}>{label}</div>
               </div>
             ))}
           </div>
-          <div className="hero-cta-group-l" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
-            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="btn-pri-l" target="_blank" data-cursor-cta="true">Mulai Sekarang <span>→</span></a>
-            <a href="#pricing" className="btn-ghost-l">Lihat Harga <span>↓</span></a>
+
+          <div className="il-hero-cta" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
+            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="il-btn-pri" target="_blank" {...addCursorTarget('hover')}>
+              Mulai Sekarang <span>→</span>
+            </a>
+            <a href="#pricing" className="il-btn-ghost" {...addCursorTarget('hover')}>
+              Lihat Harga <span>↓</span>
+            </a>
           </div>
         </div>
+
+        {/* Scrolling photo strip */}
+        {hasPhotos && <PhotoStrip photos={s.hero_photos} />}
       </section>
 
-      {/* MARQUEE 1 */}
-      <div style={{ overflow: 'hidden', padding: '16px 0', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
-        <div className="marquee-track-l">
+      {/* ── MARQUEE 1 ── */}
+      <div style={{ overflow: 'hidden', padding: '14px 0', borderBottom: '1px solid var(--border)', background: '#0A0A0A' }}>
+        <div className="il-marquee">
           {[...MARQUEE_1, ...MARQUEE_1].map((m, i) => (
-            <div key={i} className="marquee-item-l"><span style={{ color: '#FF4D00', fontSize: 20, lineHeight: 1 }}>●</span> {m}</div>
+            <div key={i} className="il-marquee-item"><span style={{ color: '#FF4D00', fontSize: 18 }}>●</span> {m}</div>
           ))}
         </div>
       </div>
 
-      {/* SERVICES */}
-      <section id="services" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)', background: '#141414' }}>
+      {/* ══════════════════════════════════════════════
+          SERVICES
+      ══════════════════════════════════════════════ */}
+      <section id="services" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-          <div className="s-header-l" data-reveal-id="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
-            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>01 — Our Services</span>
+
+          {/* Section header */}
+          <div data-rid="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>01 — Services</span>
             <div>
-              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
-                Kami kelola <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>semuanya</span> — kamu fokus produk.
+              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+                Kami kelola <em style={{ color: '#FF4D00' }}>semuanya</em><br />— kamu fokus produk.
               </h2>
-              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Sebagai tim yang berdedikasi, kami ciptakan pengalaman live streaming yang memorable, engaging, dan yang paling penting — menghasilkan penjualan.</p>
+              <p style={{ marginTop: 20, fontSize: 15, lineHeight: 1.85, color: 'var(--muted)', maxWidth: 480 }}>
+                Tim dedicated yang berdedikasi — setiap sesi dirancang untuk menciptakan momen live yang engaging, memorable, dan yang paling penting: menghasilkan penjualan.
+              </p>
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid rgba(240,237,230,0.08)' }}>
+          {/* Service rows */}
+          <div style={{ borderTop: '1px solid var(--border)' }}>
             {SERVICES.map((sv, i) => (
-              <div key={sv.num} className="service-item-l" data-service-item data-reveal-id={`svc-${i}`} style={{ ...rv(`svc-${i}`), borderBottom: '1px solid rgba(240,237,230,0.08)', overflow: 'hidden', position: 'relative' }}>
-                <div className="service-bg-l" style={{ background: `linear-gradient(90deg, ${sv.bg} 0%, transparent 60%)` }} />
-                <div className="service-head-l">
-                  <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.16em', color: 'var(--muted)' }}>{sv.num}</span>
-                  <span style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(24px,3vw,38px)', fontWeight: 700, letterSpacing: '-0.02em', color: '#F0EDE6' }}>{sv.name}</span>
-                  <div className="service-arrow-l">→</div>
+              <div
+                key={sv.id}
+                className="il-svc-row"
+                data-rid={`svc-${i}`}
+                data-rdelay={`${i * 80}`}
+                style={{ ...rv(`svc-${i}`, i * 80) }}
+                onMouseEnter={() => setActiveService(sv.id)}
+                onMouseLeave={() => setActiveService(null)}
+                {...addCursorTarget('hover')}
+              >
+                {/* Colored accent line */}
+                <div style={{
+                  position: 'absolute', left: 0, top: 0, bottom: 0, width: 2,
+                  background: sv.color,
+                  opacity: activeService === sv.id ? 1 : 0,
+                  transition: 'opacity .3s',
+                }} />
+
+                <div className="il-svc-head">
+                  <span className="il-svc-num">{sv.num}</span>
+                  <div>
+                    <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(22px,2.8vw,38px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#F2EFE8' }}>{sv.name}</div>
+                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.08em', color: sv.color, marginTop: 4, opacity: 0.9 }}>{sv.tagline}</div>
+                  </div>
+                  <div className="il-svc-arrow">→</div>
                 </div>
-                <div className="service-body-l">
+
+                <div className="il-svc-body">
                   <div />
                   <div>
-                    <p style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--muted)' }}>{sv.desc}</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 16 }}>
-                      {sv.tags.map(t => <span key={t} style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', border: '1px solid rgba(240,237,230,0.08)', padding: '5px 12px', borderRadius: 100, color: 'var(--muted)' }}>{t}</span>)}
+                    <p style={{ fontSize: 15, lineHeight: 1.85, color: 'var(--muted)' }}>{sv.desc}</p>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
+                      {sv.tags.map(t => (
+                        <span key={t} style={{
+                          fontFamily: "'Space Mono', monospace", fontSize: 10,
+                          letterSpacing: '.1em', textTransform: 'uppercase',
+                          border: `1px solid ${sv.color}30`, padding: '5px 12px',
+                          borderRadius: 100, color: sv.color,
+                        }}>{t}</span>
+                      ))}
                     </div>
                   </div>
                 </div>
@@ -398,103 +922,231 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* MARQUEE 2 — orange */}
-      <div style={{ overflow: 'hidden', padding: '16px 0', background: '#FF4D00' }}>
-        <div className="marquee-track-l rev">
+      {/* ── MARQUEE 2 — orange ── */}
+      <div style={{ overflow: 'hidden', padding: '14px 0', background: '#FF4D00' }}>
+        <div className="il-marquee rev">
           {[...MARQUEE_2, ...MARQUEE_2].map((m, i) => (
-            <div key={i} className="marquee-item-l" style={{ color: 'rgba(255,255,255,0.85)' }}><span style={{ color: 'white', fontSize: 20, lineHeight: 1 }}>★</span> {m}</div>
+            <div key={i} className="il-marquee-item" style={{ color: 'rgba(255,255,255,0.85)' }}>
+              <span style={{ color: 'white', fontSize: 18 }}>★</span> {m}
+            </div>
           ))}
         </div>
       </div>
 
-      {/* ABOUT */}
-      <section id="about" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+      {/* ══════════════════════════════════════════════
+          WORK / PHOTO GALLERY (dari Cloudinary admin)
+      ══════════════════════════════════════════════ */}
+      {s.hero_photos.length > 0 && (
+        <section id="work" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)' }}>
+          <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+
+            <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — Work</span>
+              <div>
+                <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+                  Di balik layar <em style={{ color: '#FF4D00' }}>studio kami.</em>
+                </h2>
+                <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
+                  Setup profesional, host terlatih, atmosfer yang mendorong penjualan — lihat sendiri.
+                </p>
+              </div>
+            </div>
+
+            {/* Masonry-style photo grid */}
+            <div
+              className="il-photo-grid"
+              data-rid="work-photos"
+              style={{
+                ...rv('work-photos', 100),
+                display: 'grid',
+                gridTemplateColumns: 'repeat(3, 1fr)',
+                gap: 16,
+              }}
+            >
+              {s.hero_photos.slice(0, 6).map((photo, i) => (
+                <div
+                  key={i}
+                  className="il-photo-card"
+                  style={{
+                    height: i === 0 || i === 5 ? 400 : 280,
+                    gridRow: i === 0 ? 'span 2' : 'span 1',
+                  }}
+                  {...addCursorTarget('hover')}
+                >
+                  <img
+                    src={getCloudinaryThumbnail(photo.cloudinary_url, 800, 800)}
+                    alt={photo.caption || `Studio foto ${i + 1}`}
+                  />
+                </div>
+              ))}
+            </div>
+
+            {s.hero_photos.length > 6 && (
+              <div style={{ textAlign: 'center', marginTop: 32 }}>
+                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                  +{s.hero_photos.length - 6} foto lainnya
+                </span>
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
+      {/* ══════════════════════════════════════════════
+          ABOUT / STATS
+      ══════════════════════════════════════════════ */}
+      <section id="about" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-          <div className="s-header-l" data-reveal-id="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
-            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — About Us</span>
-            <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
-              Kami ada untuk <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>hasilkan penjualan</span>, bukan sekadar tampil.
+
+          <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>{s.hero_photos.length > 0 ? '03' : '02'} — About</span>
+            <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+              Kami ada untuk <em style={{ color: '#FF4D00' }}>hasilkan penjualan</em>,<br />bukan sekadar tampil.
             </h2>
           </div>
 
-          <div className="about-grid-l" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start' }}>
-            <div data-reveal-id="about-1" style={rv('about-1')}>
-              <p style={{ fontFamily: 'Syne, sans-serif', fontWeight: 700, fontSize: 'clamp(26px,3vw,40px)', lineHeight: 1.35, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
+          <div className="il-about-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start', marginBottom: 80 }}>
+            <div data-rid="about-1" style={rv('about-1')}>
+              <p style={{
+                fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 700,
+                fontSize: 'clamp(24px,2.8vw,40px)', lineHeight: 1.35, letterSpacing: '-0.02em',
+                color: '#F2EFE8',
+              }}>
                 Toko kamu punya produk bagus.<br />
-                Masalahnya, <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>tidak ada yang tahu.</span><br /><br />
+                Masalahnya, <em style={{ color: '#FF4D00' }}>tidak ada yang tahu.</em><br /><br />
                 Kami ubah itu.
               </p>
             </div>
-            <div data-reveal-id="about-2" style={rv('about-2')}>
-              <p style={{ fontSize: 16, lineHeight: 1.85, color: 'var(--muted)', marginBottom: 36 }}>
-                Iranza Live adalah jasa live streaming profesional yang dirancang khusus untuk <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>UMKM Indonesia</strong>. Kami menyediakan host terlatih, studio lengkap, dan strategi penjualan berbasis data yang terbukti meningkatkan konversi — di <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>Shopee Live</strong> maupun <strong style={{ color: 'rgba(240,237,230,0.85)', fontWeight: 400 }}>TikTok Shop</strong>.
+            <div data-rid="about-2" style={rv('about-2')}>
+              <p style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--muted)', marginBottom: 36 }}>
+                Iranza Live adalah jasa live streaming profesional yang dirancang khusus untuk{' '}
+                <strong style={{ color: 'rgba(242,239,232,0.8)', fontWeight: 500 }}>UMKM Indonesia</strong>.
+                Kami menyediakan host terlatih, studio lengkap, dan strategi penjualan berbasis data yang terbukti
+                meningkatkan konversi — di{' '}
+                <strong style={{ color: 'rgba(242,239,232,0.8)', fontWeight: 500 }}>Shopee Live</strong> maupun{' '}
+                <strong style={{ color: 'rgba(242,239,232,0.8)', fontWeight: 500 }}>TikTok Shop</strong>.
                 <br /><br />
-                Kamu fokus di produk dan operasional toko. Kami urus semuanya di depan kamera — dari persiapan, eksekusi live, sampai laporan hasil sesi yang kamu terima setiap selesai.
+                Kamu fokus di produk dan operasional toko. Kami urus semuanya di depan kamera — dari persiapan,
+                eksekusi live, sampai laporan hasil sesi yang kamu terima setiap selesai.
               </p>
-              <a href={wa('Halo Iranza Live, mau konsultasi')} className="btn-pri-l" target="_blank" data-cursor-cta="true" style={{ fontSize: 14, padding: '14px 28px' }}>Konsultasi Gratis →</a>
+              <a href={wa('Halo Iranza Live, mau konsultasi gratis')} className="il-btn-pri" target="_blank" style={{ fontSize: 14, padding: '14px 28px' }} {...addCursorTarget('hover')}>
+                Konsultasi Gratis →
+              </a>
             </div>
           </div>
 
-          <div className="stats-grid-l" data-reveal-id="about-stats" style={{ ...rv('about-stats'), display: 'grid', gridTemplateColumns: '1fr 1fr', border: '1px solid rgba(240,237,230,0.08)', marginTop: 80 }}>
+          {/* Stats */}
+          <div
+            className="il-stats-grid"
+            data-rid="stats-wrap"
+            style={{
+              ...rv('stats-wrap'),
+              display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
+              border: '1px solid var(--border)',
+            }}
+          >
             {[
-              { num: <>{c50}<span style={{ color: '#FF4D00' }}>+</span></>, desc: 'Seller aktif yang sudah percayakan live streaming tokonya ke kami' },
-              { num: c4, desc: 'Slot live tersedia setiap hari — pagi, siang, sore, dan malam' },
-              { num: <>{c2}<span style={{ color: 'var(--muted)', fontSize: '0.55em', letterSpacing: '-.01em' }}>H</span></>, desc: 'Durasi setiap sesi live — cukup untuk dorong awareness dan konversi' },
-              { num: <>4.9<span style={{ color: '#FFD600' }}>★</span></>, desc: 'Rating rata-rata kepuasan seller yang sudah pakai layanan kami' },
+              { num: <>{c50}<span style={{ color: '#FF4D00' }}>+</span></>, label: 'Seller Aktif', sub: 'Sudah percayakan live streaming ke kami' },
+              { num: <>{c4}</>, label: 'Slot / Hari', sub: 'Pagi, siang, sore, dan malam — tersedia terus' },
+              { num: <>{c49 / 10}.<span style={{ fontSize: '0.65em' }}>9</span><span style={{ color: '#FFD600' }}>★</span></>, label: 'Rata-rata Rating', sub: 'Kepuasan seller yang sudah pakai layanan kami' },
             ].map((st, i) => (
-              <div key={i} className="stat-cell-l" style={{ padding: '44px 40px', borderRight: i % 2 === 0 ? '1px solid rgba(240,237,230,0.08)' : 'none', borderBottom: i < 2 ? '1px solid rgba(240,237,230,0.08)' : 'none', transition: 'background .3s' }}>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(48px,6vw,80px)', fontWeight: 800, lineHeight: 1, letterSpacing: '-0.03em', color: '#F0EDE6', marginBottom: 12 }}>{st.num}</div>
-                <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--muted)' }}>{st.desc}</p>
+              <div key={i} className="il-stat" style={{
+                padding: '44px 40px',
+                borderRight: i < 2 ? '1px solid var(--border)' : 'none',
+              }}>
+                <div style={{
+                  fontFamily: "'Cabinet Grotesk', sans-serif",
+                  fontSize: 'clamp(48px,6vw,80px)', fontWeight: 900,
+                  lineHeight: 1, letterSpacing: '-0.03em', color: '#F2EFE8', marginBottom: 14,
+                }}>{st.num}</div>
+                <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F2EFE8', marginBottom: 6 }}>{st.label}</div>
+                <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--muted)' }}>{st.sub}</p>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* PRICING */}
-      <section id="pricing" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+      {/* ══════════════════════════════════════════════
+          PRICING
+      ══════════════════════════════════════════════ */}
+      <section id="pricing" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-          <div className="s-header-l" data-reveal-id="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
-            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>03 — Pricing</span>
+
+          <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>{s.hero_photos.length > 0 ? '04' : '03'} — Pricing</span>
             <div>
-              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
-                Promo Launching. <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>Terbatas.</span>
+              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+                Promo Launching. <em style={{ color: '#FF4D00' }}>Terbatas.</em>
               </h2>
-              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Harga ini tidak akan berlaku selamanya. 4 slot per hari, first come first served.</p>
+              <p style={{ marginTop: 18, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 480 }}>
+                Harga ini tidak akan berlaku selamanya. 4 slot per hari, first come first served.
+              </p>
             </div>
           </div>
 
           {[
-            { icon: '☀️', label: 'Slot Pagi & Siang', time: s.slot_pagi_times, rows: [
-              { icon: '🛒', name: 'Live Shopee', desc: 'Per sesi · 2 jam · 1 host', badge: 'Pagi', price: s.prices.pagi_shopee },
-              { icon: '🎵', name: 'Live TikTok Shop', desc: 'Per sesi · 2 jam · 1 host', badge: 'Pagi', price: s.prices.pagi_tiktok },
-              { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · 2 jam · cover keduanya', badge: 'Best Value', price: s.prices.pagi_dual, featured: true },
-            ]},
-            { icon: '🌙', label: 'Slot Sore & Malam', time: s.slot_malam_times, rows: [
-              { icon: '🛒', name: 'Live Shopee', desc: 'Per sesi · 2 jam · prime time', badge: 'Malam', price: s.prices.malam_shopee },
-              { icon: '🎵', name: 'Live TikTok Shop', desc: 'Per sesi · 2 jam · prime time', badge: 'Malam', price: s.prices.malam_tiktok },
-              { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · 2 jam · prime time', badge: 'Best Value', price: s.prices.malam_dual, featured: true },
-            ]},
+            {
+              icon: '☀️', label: 'Slot Pagi & Siang', time: s.slot_pagi_times,
+              rows: [
+                { icon: '🛒', name: 'Live Shopee', desc: '2 jam · 1 host · Pagi', badge: 'Pagi', price: s.prices.pagi_shopee },
+                { icon: '🎵', name: 'Live TikTok Shop', desc: '2 jam · 1 host · Pagi', badge: 'Pagi', price: s.prices.pagi_tiktok },
+                { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · 2 jam', badge: 'Best Value', price: s.prices.pagi_dual, feat: true },
+              ],
+            },
+            {
+              icon: '🌙', label: 'Slot Sore & Malam', time: s.slot_malam_times,
+              rows: [
+                { icon: '🛒', name: 'Live Shopee', desc: '2 jam · 1 host · Prime time', badge: 'Malam', price: s.prices.malam_shopee },
+                { icon: '🎵', name: 'Live TikTok Shop', desc: '2 jam · 1 host · Prime time', badge: 'Malam', price: s.prices.malam_tiktok },
+                { icon: '🔥', name: 'Dual Platform', desc: 'Shopee + TikTok · Prime time', badge: 'Best Value', price: s.prices.malam_dual, feat: true },
+              ],
+            },
           ].map((slot, si) => (
-            <div key={si} data-reveal-id={`slot-${si}`} style={{ ...rv(`slot-${si}`), marginBottom: 56 }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', padding: '22px 0', borderTop: '1px solid rgba(240,237,230,0.08)' }}>
-                <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 20, fontWeight: 700, color: '#F0EDE6', letterSpacing: '-0.01em', display: 'flex', alignItems: 'center', gap: 14 }}>
-                  {slot.icon}&nbsp; {slot.label}
-                  <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.12em', color: 'var(--muted)', fontWeight: 400 }}>{slot.time}</span>
+            <div key={si} data-rid={`slot-${si}`} style={{ ...rv(`slot-${si}`, si * 100), marginBottom: 52 }}>
+              <div style={{
+                display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                padding: '20px 0', borderTop: '1px solid var(--border)',
+              }}>
+                <div style={{
+                  fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 20, fontWeight: 800,
+                  color: '#F2EFE8', display: 'flex', alignItems: 'center', gap: 12,
+                }}>
+                  {slot.icon} {slot.label}
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 400 }}>
+                    {slot.time}
+                  </span>
                 </div>
               </div>
-              <div style={{ borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+
+              <div style={{ borderBottom: '1px solid var(--border)' }}>
                 {slot.rows.map((row, ri) => (
-                  <div key={ri} className={`price-row-l${row.featured ? ' featured' : ''}`} style={{ display: 'grid', gridTemplateColumns: '52px 1fr 120px 100px', alignItems: 'center', gap: 24, padding: '22px 0', borderTop: '1px solid rgba(240,237,230,0.05)', position: 'relative' }}>
-                    <div className="price-row-bg-l" />
-                    <div style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22, flexShrink: 0, position: 'relative', zIndex: 1 }}>{row.icon}</div>
+                  <div key={ri} className={`il-price-row${row.feat ? ' feat' : ''}`}>
+                    <div style={{
+                      width: 44, height: 44,
+                      border: '1px solid var(--border)', borderRadius: 10,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 22, flexShrink: 0, position: 'relative', zIndex: 1,
+                    }}>{row.icon}</div>
+
                     <div style={{ position: 'relative', zIndex: 1 }}>
-                      <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 18, fontWeight: 600, color: '#F0EDE6', letterSpacing: '-0.01em' }}>{row.name}</div>
-                      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{row.desc}</div>
+                      <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F2EFE8' }}>{row.name}</div>
+                      <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{row.desc}</div>
                     </div>
-                    <span className="pr-badge-l" style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: '#FF4D00', border: '1px solid rgba(255,77,0,0.35)', padding: '5px 10px', borderRadius: 2, justifySelf: 'start', position: 'relative', zIndex: 1 }}>{row.badge}</span>
-                    <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 28, fontWeight: 800, color: '#F0EDE6', letterSpacing: '-0.02em', textAlign: 'right', whiteSpace: 'nowrap', position: 'relative', zIndex: 1 }}>
-                      {row.price}<span style={{ fontSize: 13, fontWeight: 400, fontFamily: 'Space Mono, monospace', color: 'var(--muted)', marginLeft: 2, letterSpacing: '.06em' }}>rb</span>
+
+                    <span className="il-pr-badge" style={{
+                      fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase',
+                      color: '#FF4D00', border: '1px solid rgba(255,77,0,.3)', padding: '5px 10px', borderRadius: 3,
+                      position: 'relative', zIndex: 1,
+                    }}>{row.badge}</span>
+
+                    <div style={{
+                      fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 30, fontWeight: 900,
+                      color: '#F2EFE8', letterSpacing: '-0.02em', textAlign: 'right',
+                      whiteSpace: 'nowrap', position: 'relative', zIndex: 1,
+                    }}>
+                      {row.price}
+                      <span style={{ fontSize: 13, fontFamily: "'Space Mono', monospace", color: 'var(--muted)', marginLeft: 3, fontWeight: 400 }}>rb</span>
                     </div>
                   </div>
                 ))}
@@ -502,100 +1154,223 @@ export default function LandingPage() {
             </div>
           ))}
 
-          <div className="pricing-cta-block-l" data-reveal-id="price-cta" style={{ ...rv('price-cta'), display: 'grid', gridTemplateColumns: '1fr auto', alignItems: 'center', gap: 32, background: '#FF4D00', padding: '32px 44px', borderRadius: 2 }}>
+          {/* CTA bar */}
+          <div data-rid="price-cta" style={{
+            ...rv('price-cta', 200),
+            display: 'grid', gridTemplateColumns: '1fr auto',
+            alignItems: 'center', gap: 32,
+            background: '#FF4D00', padding: '30px 44px', borderRadius: 4,
+          }}>
             <div>
-              <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 26, fontWeight: 800, color: 'white', letterSpacing: '-0.01em' }}>⚡ Terbatas 4 Slot Per Hari</div>
+              <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 26, fontWeight: 900, color: 'white' }}>⚡ Terbatas 4 Slot Per Hari</div>
               <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Harga promo launching — book sekarang sebelum slot penuh.</div>
             </div>
-            <a href={wa('Halo Iranza Live, mau book slot promo!')} target="_blank" data-cursor-cta="true" style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', background: 'white', color: '#FF4D00', padding: '16px 32px', borderRadius: 2, whiteSpace: 'nowrap', display: 'inline-block', transition: 'transform .2s, box-shadow .2s' }}>Book via WhatsApp →</a>
+            <a
+              href={wa('Halo Iranza Live, mau book slot promo!')}
+              target="_blank"
+              style={{
+                fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: '.12em',
+                textTransform: 'uppercase', background: 'white', color: '#FF4D00',
+                padding: '16px 32px', borderRadius: 3, whiteSpace: 'nowrap', display: 'inline-block',
+              }}
+              {...addCursorTarget('hover')}
+            >
+              Book via WhatsApp →
+            </a>
           </div>
         </div>
       </section>
 
-      {/* TESTIMONIALS */}
-      <section id="testi" style={{ padding: '112px 48px', borderBottom: '1px solid rgba(240,237,230,0.08)', background: '#141414' }}>
+      {/* ══════════════════════════════════════════════
+          TESTIMONIALS
+      ══════════════════════════════════════════════ */}
+      <section id="reviews" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
-          <div className="s-header-l" data-reveal-id="testi-h" style={{ ...rv('testi-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 80, alignItems: 'start' }}>
-            <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>04 — Reviews</span>
+
+          <div data-rid="testi-h" style={{ ...rv('testi-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>
+              {s.hero_photos.length > 0 ? '05' : '04'} — Reviews
+            </span>
             <div>
-              <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(36px,4.5vw,58px)', lineHeight: 1, letterSpacing: '-0.02em', color: '#F0EDE6' }}>
-                Dari seller yang sudah <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>buktikan sendiri.</span>
+              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+                Dari seller yang sudah <em style={{ color: '#FF4D00' }}>buktikan sendiri.</em>
               </h2>
-              <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 500 }}>Kami supply layanan live streaming ke seller di seluruh Indonesia dengan hasil yang terukur.</p>
+              <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
+                Kami supply layanan live streaming ke seller di seluruh Indonesia dengan hasil yang terukur.
+              </p>
             </div>
           </div>
 
-          <div data-reveal-id="testi-track" style={{ ...rv('testi-track'), overflow: 'hidden', position: 'relative', margin: '0 -48px', padding: '0 48px' }}>
-            <div ref={trackRef} className="testi-track-l" onMouseDown={onTrackDown} onMouseUp={onTrackUp} onMouseLeave={onTrackUp} onMouseMove={onTrackMove}
-              style={{ display: 'flex', gap: 20, overflowX: 'auto', scrollSnapType: 'x mandatory', padding: '4px 48px 20px', margin: '0 -48px', cursor: isDesktop ? (draggingRef.current ? 'grabbing' : 'grab') : 'auto' }}>
+          <div data-rid="testi-track" style={{ ...rv('testi-track'), overflow: 'hidden', position: 'relative', margin: '0 -48px', padding: '0 48px' }}>
+            <div
+              ref={trackRef}
+              className="il-ttrack"
+              onMouseDown={onTrackDown} onMouseUp={onTrackUp}
+              onMouseLeave={onTrackUp} onMouseMove={onTrackMove}
+              style={{
+                display: 'flex', gap: 18,
+                overflowX: 'auto', scrollSnapType: 'x mandatory',
+                padding: '4px 48px 24px', margin: '0 -48px',
+                cursor: isDesktop ? (draggingRef.current ? 'grabbing' : 'grab') : 'auto',
+              }}
+            >
               {s.testimonials.map((t, i) => (
-                <div key={i} className="testi-card-l" style={{ minWidth: 400, maxWidth: 400, background: '#0C0C0C', border: '1px solid rgba(240,237,230,0.08)', borderRadius: 2, padding: '36px 32px', scrollSnapAlign: 'start', flexShrink: 0, transition: 'border-color .3s, transform .3s' }}>
+                <div key={i} className="il-tcard">
                   <div style={{ color: '#FFD600', fontSize: 13, letterSpacing: 3, marginBottom: 20 }}>★★★★★</div>
-                  <p style={{ fontSize: 15, lineHeight: 1.8, color: 'rgba(240,237,230,0.6)', fontStyle: 'italic', marginBottom: 28 }}>"{t.text}"</p>
+                  <p style={{ fontSize: 15, lineHeight: 1.85, color: 'rgba(242,239,232,0.55)', fontStyle: 'italic', marginBottom: 28 }}>"{t.text}"</p>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{ width: 44, height: 44, borderRadius: '50%', background: '#0C0C0C', border: '1px solid rgba(240,237,230,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 19, flexShrink: 0 }}>{t.icon}</div>
+                    <div style={{
+                      width: 44, height: 44, borderRadius: '50%',
+                      background: '#0A0A0A', border: '1px solid var(--border)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 19, flexShrink: 0,
+                    }}>{t.icon}</div>
                     <div>
-                      <div style={{ fontFamily: 'Syne, sans-serif', fontSize: 14, fontWeight: 700, color: '#F0EDE6' }}>{t.name}</div>
-                      <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{t.role}</div>
+                      <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 15, fontWeight: 700, color: '#F2EFE8' }}>{t.name}</div>
+                      <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{t.role}</div>
                     </div>
                   </div>
                 </div>
               ))}
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 32 }}>
-              <button className="testi-btn-l" onClick={() => scrollTesti(-1)} aria-label="Previous" style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--muted)', transition: 'border-color .2s, color .2s, background .2s' }}>←</button>
-              <button className="testi-btn-l" onClick={() => scrollTesti(1)} aria-label="Next" style={{ width: 44, height: 44, border: '1px solid rgba(240,237,230,0.08)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, color: 'var(--muted)', transition: 'border-color .2s, color .2s, background .2s' }}>→</button>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 28 }}>
+              {[-1, 1].map(dir => (
+                <button
+                  key={dir}
+                  onClick={() => scrollTesti(dir)}
+                  style={{
+                    width: 44, height: 44, border: '1px solid var(--border)', borderRadius: '50%',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 18, color: 'var(--muted)',
+                    transition: 'border-color .2s, color .2s, background .2s',
+                  }}
+                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#FF4D00'; (e.currentTarget as HTMLButtonElement).style.color = 'white'; (e.currentTarget as HTMLButtonElement).style.background = '#FF4D00'; setCursorType('hover') }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; setCursorType('default') }}
+                >
+                  {dir === -1 ? '←' : '→'}
+                </button>
+              ))}
             </div>
           </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section style={{ background: '#F0EDE6', padding: '120px 48px', position: 'relative', overflow: 'hidden' }}>
-        <div className="cta-bg-text-l" style={{ position: 'absolute', fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(100px,16vw,220px)', letterSpacing: '-0.04em', color: 'rgba(0,0,0,0.04)', whiteSpace: 'nowrap', top: '50%', left: '50%', transform: 'translate(-50%,-50%)', pointerEvents: 'none', userSelect: 'none', lineHeight: 1 }}>LIVE LIVE LIVE</div>
-        <div className="cta-inner-l" data-reveal-id="cta" style={{ ...rv('cta'), maxWidth: 1240, margin: '0 auto', display: 'grid', gridTemplateColumns: '1fr auto', gap: 80, alignItems: 'center', position: 'relative', zIndex: 1 }}>
+      {/* ══════════════════════════════════════════════
+          FINAL CTA
+      ══════════════════════════════════════════════ */}
+      <section style={{ background: '#F2EFE8', padding: '110px 48px', position: 'relative', overflow: 'hidden' }}>
+        {/* Big bg text */}
+        <div style={{
+          position: 'absolute',
+          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+          fontSize: 'clamp(80px,14vw,200px)', letterSpacing: '-0.04em',
+          color: 'rgba(0,0,0,0.045)', whiteSpace: 'nowrap',
+          top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+          pointerEvents: 'none', userSelect: 'none', lineHeight: 1,
+        }}>LIVE LIVE LIVE</div>
+
+        <div className="il-cta-grid" data-rid="cta-inner" style={{
+          ...rv('cta-inner'),
+          maxWidth: 1240, margin: '0 auto',
+          display: 'grid', gridTemplateColumns: '1fr auto',
+          gap: 80, alignItems: 'center', position: 'relative', zIndex: 1,
+        }}>
           <div>
-            <h2 style={{ fontFamily: 'Syne, sans-serif', fontWeight: 800, fontSize: 'clamp(38px,5.5vw,72px)', lineHeight: 1, letterSpacing: '-0.03em', color: '#0C0C0C' }}>
-              Toko kamu bisa<br />lebih <span style={{ fontStyle: 'italic', color: '#FF4D00' }}>ramai dari ini.</span>
+            <h2 style={{
+              fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+              fontSize: 'clamp(36px,5vw,70px)', lineHeight: 1, letterSpacing: '-0.03em',
+              color: '#0A0A0A',
+            }}>
+              Toko kamu bisa<br />lebih <em style={{ color: '#FF4D00' }}>ramai dari ini.</em>
             </h2>
-            <p style={{ marginTop: 20, fontSize: 17, lineHeight: 1.75, color: 'rgba(12,12,12,0.45)', maxWidth: 480 }}>Satu sesi live bisa mengubah hari yang sepi jadi hari yang ramai. Slot terbatas — book sekarang dan rasakan sendiri perbedaannya.</p>
+            <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.75, color: 'rgba(10,10,10,0.45)', maxWidth: 460 }}>
+              Satu sesi live bisa mengubah hari yang sepi jadi hari yang ramai. Slot terbatas — book sekarang.
+            </p>
           </div>
-          <div className="cta-right-l" style={{ textAlign: 'center', flexShrink: 0 }}>
-            <a href={`tel:+${s.whatsapp_number}`} style={{ fontFamily: 'Syne, sans-serif', fontSize: 'clamp(18px,2.2vw,26px)', fontWeight: 800, letterSpacing: '-0.01em', color: '#0C0C0C', display: 'block', marginBottom: 18 }}>📞 {phone}</a>
-            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} target="_blank" data-cursor-cta="true" style={{ fontFamily: 'Space Mono, monospace', fontSize: 12, fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase', background: '#0C0C0C', color: '#F0EDE6', padding: '16px 32px', borderRadius: 2, display: 'inline-flex', alignItems: 'center', gap: 10, transition: 'background .2s, transform .2s' }}>Chat WhatsApp Sekarang →</a>
+          <div style={{ textAlign: 'center', flexShrink: 0 }}>
+            <a href={`tel:+${s.whatsapp_number}`} style={{
+              fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(16px,2vw,24px)',
+              fontWeight: 800, color: '#0A0A0A', display: 'block', marginBottom: 20,
+            }}>📞 {phone}</a>
+            <a
+              href={wa('Halo Iranza Live, saya mau booking live streaming')}
+              target="_blank"
+              style={{
+                fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700,
+                letterSpacing: '.12em', textTransform: 'uppercase',
+                background: '#0A0A0A', color: '#F2EFE8',
+                padding: '16px 32px', borderRadius: 3,
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                transition: 'background .2s, transform .2s',
+              }}
+              onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.transform = 'translateY(-3px)'}
+              onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.transform = 'none'}
+              {...addCursorTarget('hover')}
+            >
+              Chat WhatsApp Sekarang →
+            </a>
           </div>
         </div>
       </section>
 
-      {/* FOOTER */}
-      <footer style={{ background: '#0C0C0C', padding: '0 48px', borderTop: '1px solid rgba(240,237,230,0.08)' }}>
-        <div className="footer-top-l" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 40, padding: '56px 0', borderBottom: '1px solid rgba(240,237,230,0.08)' }}>
+      {/* ── FOOTER ── */}
+      <footer style={{ background: '#0A0A0A', padding: '0 48px', borderTop: '1px solid var(--border)' }}>
+        <div className="il-footer-grid" style={{
+          display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr',
+          gap: 40, padding: '56px 0', borderBottom: '1px solid var(--border)',
+        }}>
           <div>
-            <img src="/logo_iranza_live.png" alt="Iranza Live" style={{ height: 34, marginBottom: 20 }} onError={e => { (e.target as HTMLImageElement).style.display = 'none' }} />
-            <p style={{ fontSize: 14, lineHeight: 1.7, color: 'var(--muted)', maxWidth: 260 }}>Jasa live streaming profesional untuk UMKM Indonesia. Shopee &amp; TikTok Shop.</p>
+            <div style={{
+              fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+              fontSize: 22, letterSpacing: '-0.01em', color: '#F2EFE8',
+              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20,
+            }}>
+              <span className="il-live-dot" />
+              Iranza<span style={{ color: '#FF4D00' }}>Live</span>
+            </div>
+            <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--muted)', maxWidth: 260 }}>
+              Creative Agency untuk live streaming UMKM Indonesia. Shopee & TikTok Shop.
+            </p>
           </div>
           <div>
-            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Layanan</div>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Layanan</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[['#services', 'Shopee Live'], ['#services', 'TikTok Shop Live'], ['#services', 'Dual Platform'], ['#pricing', 'Harga']].map(([href, label]) => (
-                <a key={label} href={href} className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>{label} <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+                <a key={label} href={href} className="il-footer-link" style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 16, fontWeight: 700, color: '#F2EFE8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {label} <span className="il-arr" style={{ fontSize: 12 }}>↗</span>
+                </a>
               ))}
             </div>
           </div>
           <div>
-            <div style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Kontak</div>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.16em', textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 20 }}>Kontak</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-              <a href={wa('Halo Iranza Live')} target="_blank" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>WhatsApp <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
-              <a href="#testi" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>Reviews <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
-              <a href="#about" className="footer-link-l" style={{ fontFamily: 'Syne, sans-serif', fontSize: 16, fontWeight: 600, color: '#F0EDE6', display: 'flex', alignItems: 'center', gap: 6, transition: 'color .2s' }}>About Us <span className="arr-l" style={{ fontSize: 12, transition: 'transform .2s' }}>↗</span></a>
+              {[
+                [wa('Halo Iranza Live'), 'WhatsApp', true],
+                ['#reviews', 'Reviews', false],
+                ['#about', 'About Us', false],
+              ].map(([href, label, ext]) => (
+                <a key={label as string} href={href as string} target={ext ? '_blank' : undefined} rel={ext ? 'noopener' : undefined} className="il-footer-link" style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 16, fontWeight: 700, color: '#F2EFE8', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {label} <span className="il-arr" style={{ fontSize: 12 }}>↗</span>
+                </a>
+              ))}
             </div>
           </div>
         </div>
-        <div className="footer-bottom-l" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 0', flexWrap: 'wrap', gap: 16 }}>
-          <span style={{ fontFamily: 'Space Mono, monospace', fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>© 2025 Iranza Live. All rights reserved.</span>
-          <a href={wa('Halo Iranza Live')} target="_blank" style={{ fontFamily: 'Space Mono, monospace', fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: '#25D366', display: 'flex', alignItems: 'center', gap: 8, transition: 'color .2s' }}>💚 {phone}</a>
+
+        <div className="il-footer-bottom" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 0', flexWrap: 'wrap', gap: 16 }}>
+          <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+            © 2025 Iranza Live. Creative Agency. All rights reserved.
+          </span>
+          <a href={wa('Halo Iranza Live')} target="_blank" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: '#25D366', display: 'flex', alignItems: 'center', gap: 8 }}>
+            💚 {phone}
+          </a>
         </div>
-        <Link to="/login" style={{ position: 'fixed', bottom: 8, left: 8, fontFamily: 'Space Mono, monospace', fontSize: 10, color: 'rgba(240,237,230,0.15)', textTransform: 'uppercase', letterSpacing: '.1em', zIndex: 50 }}>Admin</Link>
+
+        <Link to="/login" style={{ position: 'fixed', bottom: 8, left: 8, fontFamily: "'Space Mono', monospace", fontSize: 10, color: 'rgba(242,239,232,0.1)', textTransform: 'uppercase', letterSpacing: '.1em', zIndex: 50 }}>
+          Admin
+        </Link>
       </footer>
     </div>
   )
