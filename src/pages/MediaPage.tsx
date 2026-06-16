@@ -1,15 +1,32 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useAuthStore } from '@/store/authStore'
 import { useMediaAssets } from '@/hooks/useData'
 import { supabase } from '@/lib/supabase'
 import { uploadToCloudinary, getCloudinaryThumbnail } from '@/lib/cloudinary'
 import { cn, formatDate } from '@/lib/utils'
-import type { MediaAsset } from '@/lib/database.types'
+import type { MediaAsset, Client } from '@/lib/database.types'
 import toast from 'react-hot-toast'
 
 export default function MediaPage() {
   const { profile } = useAuthStore()
-  const { assets, loading } = useMediaAssets()
+  const isClient = profile?.role === 'client'
+  const isAdmin = profile?.role === 'super_admin' || profile?.role === 'admin'
+  const canManage = isAdmin || profile?.role === 'operator'
+
+  // Resolve the client's own client_id (so they only see their own media)
+  const [ownClientId, setOwnClientId] = useState<string | null>(null)
+  const [resolvingClient, setResolvingClient] = useState(isClient)
+
+  useEffect(() => {
+    if (!isClient || !profile?.id) { setResolvingClient(false); return }
+    supabase.from('clients').select('id').eq('profile_id', profile.id).maybeSingle()
+      .then(({ data }) => {
+        setOwnClientId((data as Pick<Client, 'id'> | null)?.id || null)
+        setResolvingClient(false)
+      })
+  }, [isClient, profile?.id])
+
+  const { assets, loading } = useMediaAssets(undefined, isClient ? (ownClientId || undefined) : undefined)
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [dragOver, setDragOver] = useState(false)
@@ -19,6 +36,7 @@ export default function MediaPage() {
   const filtered = assets.filter(a => filter === 'all' || a.resource_type === filter)
 
   const handleUpload = useCallback(async (files: FileList | null) => {
+    if (!canManage) return // safety net — UI already hides the control for non-managers
     if (!files || files.length === 0) return
     setUploading(true)
 
@@ -56,15 +74,17 @@ export default function MediaPage() {
 
     setUploading(false)
     setUploadProgress(0)
-  }, [profile?.id])
+  }, [profile?.id, canManage])
 
   const handleDrop = useCallback((e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
+    if (!canManage) return
     handleUpload(e.dataTransfer.files)
-  }, [handleUpload])
+  }, [handleUpload, canManage])
 
   const handleDelete = async (asset: MediaAsset) => {
+    if (!canManage) return // safety net — button is hidden for clients
     if (!confirm('Hapus file ini?')) return
     const { error } = await supabase.from('media_assets').delete().eq('id', asset.id)
     if (error) toast.error('Gagal menghapus')
@@ -77,58 +97,80 @@ export default function MediaPage() {
     return `${(bytes / 1_000).toFixed(0)} KB`
   }
 
+  if (resolvingClient) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="font-display text-2xl tracking-widest text-muted">MEMUAT...</div>
+      </div>
+    )
+  }
+
   return (
     <div className="p-6 max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="font-display text-3xl tracking-widest text-text">MEDIA <span className="text-accent">LIBRARY</span></h1>
-          <p className="text-muted text-sm font-body mt-1">{assets.length} file tersimpan di Cloudinary</p>
+          <p className="text-muted text-sm font-body mt-1">
+            {assets.length} file {isClient ? 'media kamu' : 'tersimpan'} di Cloudinary
+          </p>
         </div>
       </div>
 
-      {/* Upload Zone */}
-      <div
-        onDrop={handleDrop}
-        onDragOver={e => { e.preventDefault(); setDragOver(true) }}
-        onDragLeave={() => setDragOver(false)}
-        className={cn(
-          'border-2 border-dashed rounded-2xl p-8 text-center transition-all relative',
-          dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
-        )}
-      >
-        {uploading ? (
-          <div className="space-y-3">
-            <div className="text-2xl">⬆️</div>
-            <div className="font-body text-sm text-text">Mengupload... {uploadProgress}%</div>
-            <div className="w-48 mx-auto h-1.5 bg-surface2 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-accent rounded-full transition-all duration-300"
-                style={{ width: `${uploadProgress}%` }}
-              />
+      {/* Upload Zone — staff only (admin, super_admin, operator) */}
+      {canManage && (
+        <div
+          onDrop={handleDrop}
+          onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+          onDragLeave={() => setDragOver(false)}
+          className={cn(
+            'border-2 border-dashed rounded-2xl p-8 text-center transition-all relative',
+            dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
+          )}
+        >
+          {uploading ? (
+            <div className="space-y-3">
+              <div className="text-2xl">⬆️</div>
+              <div className="font-body text-sm text-text">Mengupload... {uploadProgress}%</div>
+              <div className="w-48 mx-auto h-1.5 bg-surface2 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
             </div>
+          ) : (
+            <>
+              <div className="text-3xl mb-3 opacity-50">🖼️</div>
+              <div className="font-body text-sm text-text mb-1">Drag & drop file di sini</div>
+              <div className="text-muted text-xs font-body mb-4">atau klik tombol di bawah untuk pilih file</div>
+              <label className="inline-flex items-center gap-2 bg-accent text-bg px-5 py-2 rounded-xl font-bold text-sm cursor-pointer hover:brightness-110 transition-all">
+                <input
+                  type="file"
+                  multiple
+                  accept="image/*,video/*"
+                  onChange={e => handleUpload(e.target.files)}
+                  className="hidden"
+                />
+                Pilih File
+              </label>
+              <div className="text-muted text-xs font-body mt-3">
+                Mendukung: JPG, PNG, GIF, MP4, MOV, AVI — Max 100MB per file
+              </div>
+            </>
+          )}
+        </div>
+      )}
+
+      {/* Read-only notice for clients */}
+      {isClient && (
+        <div className="bg-accent/5 border border-accent/20 rounded-2xl p-4 flex gap-3 items-start">
+          <span className="text-xl">📂</span>
+          <div className="text-sm font-body text-muted">
+            Ini adalah media dari sesi live streaming kamu. Hubungi tim Iranza Live kalau ada yang ingin ditambahkan.
           </div>
-        ) : (
-          <>
-            <div className="text-3xl mb-3 opacity-50">🖼️</div>
-            <div className="font-body text-sm text-text mb-1">Drag & drop file di sini</div>
-            <div className="text-muted text-xs font-body mb-4">atau klik tombol di bawah untuk pilih file</div>
-            <label className="inline-flex items-center gap-2 bg-accent text-bg px-5 py-2 rounded-xl font-bold text-sm cursor-pointer hover:brightness-110 transition-all">
-              <input
-                type="file"
-                multiple
-                accept="image/*,video/*"
-                onChange={e => handleUpload(e.target.files)}
-                className="hidden"
-              />
-              Pilih File
-            </label>
-            <div className="text-muted text-xs font-body mt-3">
-              Mendukung: JPG, PNG, GIF, MP4, MOV, AVI — Max 100MB per file
-            </div>
-          </>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex gap-2">
@@ -155,7 +197,7 @@ export default function MediaPage() {
       ) : filtered.length === 0 ? (
         <div className="py-20 text-center">
           <div className="text-4xl mb-3 opacity-30">🖼️</div>
-          <div className="text-muted font-body text-sm">Belum ada media diupload</div>
+          <div className="text-muted font-body text-sm">Belum ada media {isClient ? 'untuk sesi kamu' : 'diupload'}</div>
         </div>
       ) : (
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
@@ -248,12 +290,14 @@ export default function MediaPage() {
                 >
                   Buka
                 </a>
-                <button
-                  onClick={() => { handleDelete(preview); setPreview(null) }}
-                  className="px-4 py-2 bg-accent2/10 border border-accent2/30 text-accent2 rounded-xl text-xs font-bold hover:bg-accent2/20 transition-all"
-                >
-                  Hapus
-                </button>
+                {canManage && (
+                  <button
+                    onClick={() => { handleDelete(preview); setPreview(null) }}
+                    className="px-4 py-2 bg-accent2/10 border border-accent2/30 text-accent2 rounded-xl text-xs font-bold hover:bg-accent2/20 transition-all"
+                  >
+                    Hapus
+                  </button>
+                )}
               </div>
             </div>
           </div>
