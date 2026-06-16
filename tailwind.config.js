@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
+  darkMode: ['class', '[data-theme="dark"]'],
   content: ['./index.html', './src/**/*.{js,ts,jsx,tsx}'],
   theme: {
     extend: {
@@ -9,17 +10,20 @@ export default {
         mono: ['JetBrains Mono', 'monospace'],
       },
       colors: {
-        bg: '#080b10',
-        surface: '#0e1318',
-        surface2: '#131920',
-        border: 'rgba(255,255,255,0.07)',
-        accent: '#00e5ff',
-        accent2: '#ff3d6b',
-        accent3: '#a3ff6b',
-        gold: '#ffc93c',
-        studio1: '#00e5ff',
-        studio2: '#ff3d6b',
-        muted: '#5c6b7a',
+        // All colors now resolve through CSS variables (see index.css),
+        // so they automatically follow the [data-theme] attribute on <html>.
+        bg: 'var(--bg)',
+        surface: 'var(--surface)',
+        surface2: 'var(--surface2)',
+        border: 'var(--border)',
+        accent: 'var(--accent)',
+        accent2: 'var(--accent2)',
+        accent3: 'var(--accent3)',
+        gold: 'var(--gold)',
+        studio1: 'var(--accent)',
+        studio2: 'var(--accent2)',
+        muted: 'var(--muted)',
+        text: 'var(--text)',
       },
       animation: {
         pulse2: 'pulse2 1.5s ease-in-out infinite',
