@@ -87,6 +87,37 @@ const SERVICES = [
 ]
 
 /* ─── Hooks ─────────────────────────────────────────── */
+function useParallax() {
+  const [scrollY, setScrollY] = useState(0)
+  useEffect(() => {
+    let raf = 0
+    const onScroll = () => {
+      cancelAnimationFrame(raf)
+      raf = requestAnimationFrame(() => setScrollY(window.scrollY))
+    }
+    window.addEventListener('scroll', onScroll, { passive: true })
+    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
+  }, [])
+  return scrollY
+}
+
+/** Returns a ref to attach to a section, plus that section's vertical
+ * offset (in px, can be negative) from the viewport center — used to
+ * drive subtle parallax movement on background/decorative elements
+ * inside that section as the user scrolls past it. */
+function useParallaxOffset(scrollY: number) {
+  const ref = useRef<HTMLDivElement>(null)
+  const [offset, setOffset] = useState(0)
+  useEffect(() => {
+    if (!ref.current) return
+    const rect = ref.current.getBoundingClientRect()
+    const viewportCenter = window.innerHeight / 2
+    const elCenter = rect.top + rect.height / 2
+    setOffset(elCenter - viewportCenter)
+  }, [scrollY])
+  return { ref, offset }
+}
+
 function useReveal() {
   const [visible, setVisible] = useState<Set<string>>(new Set())
   useEffect(() => {
@@ -104,23 +135,6 @@ function useReveal() {
     return () => obs.disconnect()
   }, [])
   return visible
-}
-
-function useCountUp(target: number, active: boolean) {
-  const [val, setVal] = useState(0)
-  useEffect(() => {
-    if (!active) return
-    const dur = 1800, step = 16
-    const inc = target / (dur / step)
-    let cur = 0
-    const t = setInterval(() => {
-      cur = Math.min(cur + inc, target)
-      setVal(Math.floor(cur))
-      if (cur >= target) clearInterval(t)
-    }, step)
-    return () => clearInterval(t)
-  }, [active, target])
-  return val
 }
 
 /* ─── Three.js 3D Canvas ─────────────────────────────── */
@@ -424,10 +438,10 @@ export default function LandingPage() {
   const [scrolled, setScrolled] = useState(false)
   const [activeService, setActiveService] = useState<string | null>(null)
   const visible = useReveal()
-  const trackRef = useRef<HTMLDivElement>(null)
-  const draggingRef = useRef(false)
-  const startXRef = useRef(0)
-  const scrollLeftRef = useRef(0)
+  const scrollY = useParallax()
+  const servicesParallax = useParallaxOffset(scrollY)
+  const workParallax = useParallaxOffset(scrollY)
+  const prosesParallax = useParallaxOffset(scrollY)
   const cursorRef = useRef<HTMLDivElement>(null)
   const cursorRingRef = useRef<HTMLDivElement>(null)
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
@@ -483,29 +497,10 @@ export default function LandingPage() {
     transition: `opacity 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
   })
 
-  const statsActive = visible.has('stats-wrap')
-  const c50 = useCountUp(50, statsActive)
-  const c4 = useCountUp(4, statsActive)
-  const c49 = useCountUp(49, statsActive)
-
   const addCursorTarget = (type: 'hover' | 'drag') => ({
     onMouseEnter: () => setCursorType(type),
     onMouseLeave: () => setCursorType('default'),
   })
-
-  const onTrackDown = (e: React.MouseEvent) => {
-    draggingRef.current = true
-    startXRef.current = e.pageX
-    scrollLeftRef.current = trackRef.current?.scrollLeft || 0
-    setCursorType('drag')
-  }
-  const onTrackUp = () => { draggingRef.current = false; setCursorType('default') }
-  const onTrackMove = (e: React.MouseEvent) => {
-    if (!draggingRef.current || !trackRef.current) return
-    e.preventDefault()
-    trackRef.current.scrollLeft = scrollLeftRef.current - (e.pageX - startXRef.current) * 1.3
-  }
-  const scrollTesti = (dir: number) => trackRef.current?.scrollBy({ left: dir * 440, behavior: 'smooth' })
 
   const hasPhotos = s.hero_photos && s.hero_photos.length > 0
 
@@ -663,17 +658,6 @@ export default function LandingPage() {
           pointer-events: none;
         }
 
-        .il-tcard {
-          min-width: 380px; max-width: 380px;
-          background: #111111; border: 1px solid var(--border);
-          border-radius: 4px; padding: 36px 32px; flex-shrink: 0;
-          scroll-snap-align: start;
-          transition: border-color .3s, transform .3s;
-        }
-        .il-tcard:hover { border-color: rgba(255,77,0,.3); transform: translateY(-5px); }
-
-        .il-ttrack::-webkit-scrollbar { display:none; }
-
         .il-wa-fab {
           position: fixed; bottom: 28px; right: 28px; z-index: 800;
           width: 56px; height: 56px; border-radius: 50%;
@@ -716,7 +700,6 @@ export default function LandingPage() {
           .il-svc-body { grid-template-columns: 40px 1fr !important; }
           .il-stats-grid { grid-template-columns: 1fr !important; }
           .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
-          .il-tcard { min-width: 300px !important; max-width: 300px !important; }
           .il-price-row { grid-template-columns: 44px 1fr auto !important; }
           .il-pr-badge { display: none !important; }
           .il-footer-grid { grid-template-columns: 1fr !important; }
@@ -770,7 +753,7 @@ export default function LandingPage() {
         </div>
 
         <div className="il-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
-          {[['#services', 'Services'], ['#work', 'Work'], ['#pricing', 'Pricing'], ['#reviews', 'Reviews']].map(([href, label]) => (
+          {[['#services', 'Services'], ['#work', 'Work'], ['#pricing', 'Pricing'], ['#proses', 'Proses']].map(([href, label]) => (
             <a key={href} href={href} className="il-nav-link" {...addCursorTarget('hover')}>{label}</a>
           ))}
           <a href={wa('Halo Iranza Live, mau booking')} className="il-pill" target="_blank" {...addCursorTarget('hover')}>
@@ -829,7 +812,7 @@ export default function LandingPage() {
           <p style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 320 }}>{s.hero_subtext}</p>
 
           <div style={{ display: 'flex', gap: 40 }}>
-            {[['50', '+', '#FF4D00', 'Seller Aktif'], ['4.9', '★', '#FFD600', 'Rating'], ['2', 'J', '#FF4D00', 'Per Sesi']].map(([n, sup, c, label]) => (
+            {[['4', '×', '#FF4D00', 'Slot / Hari'], ['2', 'J', '#FFD600', 'Per Sesi'], ['2', '', '#FF4D00', 'Platform']].map(([n, sup, c, label]) => (
               <div key={label}>
                 <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 38, fontWeight: 900, color: '#F2EFE8', letterSpacing: '-0.02em', lineHeight: 1 }}>
                   {n}<span style={{ color: c }}>{sup}</span>
@@ -865,8 +848,18 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           SERVICES
       ══════════════════════════════════════════════ */}
-      <section id="services" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
-        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <section id="services" ref={servicesParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+        {/* Parallax decorative number */}
+        <div style={{
+          position: 'absolute', top: '50%', right: '4%',
+          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+          color: 'rgba(255,77,0,0.035)', userSelect: 'none', pointerEvents: 'none',
+          transform: `translateY(${-50 + servicesParallax.offset * 0.06}%)`,
+          willChange: 'transform', zIndex: 0,
+        }}>01</div>
+
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           {/* Section header */}
           <div data-rid="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
@@ -945,62 +938,102 @@ export default function LandingPage() {
 
       {/* ══════════════════════════════════════════════
           WORK / PHOTO GALLERY (dari Cloudinary admin)
+          Selalu render — kalau belum ada foto, tampilkan fallback jujur
+          alih-alih section kosong (supaya anchor #work selalu punya isi).
       ══════════════════════════════════════════════ */}
-      {s.hero_photos.length > 0 && (
-        <section id="work" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)' }}>
-          <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <section id="work" ref={workParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+        {/* Parallax decorative number */}
+        <div style={{
+          position: 'absolute', top: '50%', left: '4%',
+          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+          color: 'rgba(124,58,237,0.04)', userSelect: 'none', pointerEvents: 'none',
+          transform: `translateY(${-50 + workParallax.offset * 0.06}%)`,
+          willChange: 'transform', zIndex: 0,
+        }}>02</div>
 
-            <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
-              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — Work</span>
-              <div>
-                <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
-                  Di balik layar <em style={{ color: '#FF4D00' }}>studio kami.</em>
-                </h2>
-                <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
-                  Setup profesional, host terlatih, atmosfer yang mendorong penjualan — lihat sendiri.
-                </p>
-              </div>
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+
+          <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — Work</span>
+            <div>
+              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+                Di balik layar <em style={{ color: '#FF4D00' }}>studio kami.</em>
+              </h2>
+              <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
+                {hasPhotos
+                  ? 'Setup profesional, host terlatih, atmosfer yang mendorong penjualan — lihat sendiri.'
+                  : 'Kami sedang menyiapkan dokumentasi studio. Sementara ini, ini yang bisa kami pastikan soal setup kami.'}
+              </p>
             </div>
+          </div>
 
-            {/* Masonry-style photo grid */}
+          {hasPhotos ? (
+            <>
+              {/* Masonry-style photo grid */}
+              <div
+                className="il-photo-grid"
+                data-rid="work-photos"
+                style={{
+                  ...rv('work-photos', 100),
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(3, 1fr)',
+                  gap: 16,
+                }}
+              >
+                {s.hero_photos.slice(0, 6).map((photo, i) => (
+                  <div
+                    key={i}
+                    className="il-photo-card"
+                    style={{
+                      height: i === 0 || i === 5 ? 400 : 280,
+                      gridRow: i === 0 ? 'span 2' : 'span 1',
+                    }}
+                    {...addCursorTarget('hover')}
+                  >
+                    <img
+                      src={getCloudinaryThumbnail(photo.cloudinary_url, 800, 800)}
+                      alt={photo.caption || `Studio foto ${i + 1}`}
+                    />
+                  </div>
+                ))}
+              </div>
+
+              {s.hero_photos.length > 6 && (
+                <div style={{ textAlign: 'center', marginTop: 32 }}>
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
+                    +{s.hero_photos.length - 6} foto lainnya
+                  </span>
+                </div>
+              )}
+            </>
+          ) : (
+            /* Honest fallback — no fake photos, just what we can verify in text */
             <div
-              className="il-photo-grid"
-              data-rid="work-photos"
+              data-rid="work-fallback"
               style={{
-                ...rv('work-photos', 100),
-                display: 'grid',
-                gridTemplateColumns: 'repeat(3, 1fr)',
-                gap: 16,
+                ...rv('work-fallback', 100),
+                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16,
               }}
             >
-              {s.hero_photos.slice(0, 6).map((photo, i) => (
-                <div
-                  key={i}
-                  className="il-photo-card"
-                  style={{
-                    height: i === 0 || i === 5 ? 400 : 280,
-                    gridRow: i === 0 ? 'span 2' : 'span 1',
-                  }}
-                  {...addCursorTarget('hover')}
-                >
-                  <img
-                    src={getCloudinaryThumbnail(photo.cloudinary_url, 800, 800)}
-                    alt={photo.caption || `Studio foto ${i + 1}`}
-                  />
+              {[
+                { icon: '🎥', title: 'Kamera & Lighting', desc: 'Setup video HD dengan pencahayaan yang konsisten untuk tampilan produk yang jelas.' },
+                { icon: '🎙️', title: 'Audio Bersih', desc: 'Mic dedicated untuk host, minim noise — penonton dengar penjelasan produk dengan jelas.' },
+                { icon: '💻', title: 'Studio Indoor', desc: 'Ruang tertutup dengan koneksi internet stabil, didesain khusus untuk sesi live jualan.' },
+              ].map((item, i) => (
+                <div key={i} style={{
+                  border: '1px solid var(--border)', borderRadius: 8,
+                  padding: '32px 24px', background: '#0D0D0D',
+                }}>
+                  <div style={{ fontSize: 28, marginBottom: 16 }}>{item.icon}</div>
+                  <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 16, fontWeight: 800, color: '#F2EFE8', marginBottom: 8 }}>{item.title}</div>
+                  <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--muted)' }}>{item.desc}</p>
                 </div>
               ))}
             </div>
-
-            {s.hero_photos.length > 6 && (
-              <div style={{ textAlign: 'center', marginTop: 32 }}>
-                <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                  +{s.hero_photos.length - 6} foto lainnya
-                </span>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+      </section>
 
       {/* ══════════════════════════════════════════════
           ABOUT / STATS
@@ -1009,7 +1042,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
           <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>{s.hero_photos.length > 0 ? '03' : '02'} — About</span>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>03 — About</span>
             <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
               Kami ada untuk <em style={{ color: '#FF4D00' }}>hasilkan penjualan</em>,<br />bukan sekadar tampil.
             </h2>
@@ -1045,7 +1078,7 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Stats */}
+          {/* What we actually provide — concrete, not inflated numbers */}
           <div
             className="il-stats-grid"
             data-rid="stats-wrap"
@@ -1056,19 +1089,15 @@ export default function LandingPage() {
             }}
           >
             {[
-              { num: <>{c50}<span style={{ color: '#FF4D00' }}>+</span></>, label: 'Seller Aktif', sub: 'Sudah percayakan live streaming ke kami' },
-              { num: <>{c4}</>, label: 'Slot / Hari', sub: 'Pagi, siang, sore, dan malam — tersedia terus' },
-              { num: <>{c49 / 10}.<span style={{ fontSize: '0.65em' }}>9</span><span style={{ color: '#FFD600' }}>★</span></>, label: 'Rata-rata Rating', sub: 'Kepuasan seller yang sudah pakai layanan kami' },
+              { icon: '🎙️', label: 'Host Terlatih', sub: 'Fokus teknik penjualan live, bukan sekadar baca script produk' },
+              { icon: '📹', label: 'Studio Siap Pakai', sub: 'Lighting, kamera, audio — tinggal datang bawa produk' },
+              { icon: '📊', label: 'Laporan Tiap Sesi', sub: 'Viewers, engagement, dan hasil — kamu lihat sendiri datanya' },
             ].map((st, i) => (
               <div key={i} className="il-stat" style={{
                 padding: '44px 40px',
                 borderRight: i < 2 ? '1px solid var(--border)' : 'none',
               }}>
-                <div style={{
-                  fontFamily: "'Cabinet Grotesk', sans-serif",
-                  fontSize: 'clamp(48px,6vw,80px)', fontWeight: 900,
-                  lineHeight: 1, letterSpacing: '-0.03em', color: '#F2EFE8', marginBottom: 14,
-                }}>{st.num}</div>
+                <div style={{ fontSize: 32, marginBottom: 18 }}>{st.icon}</div>
                 <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F2EFE8', marginBottom: 6 }}>{st.label}</div>
                 <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--muted)' }}>{st.sub}</p>
               </div>
@@ -1084,7 +1113,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
           <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>{s.hero_photos.length > 0 ? '04' : '03'} — Pricing</span>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>04 — Pricing</span>
             <div>
               <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
                 Promo Launching. <em style={{ color: '#FF4D00' }}>Terbatas.</em>
@@ -1192,76 +1221,70 @@ export default function LandingPage() {
       </section>
 
       {/* ══════════════════════════════════════════════
-          TESTIMONIALS
+          APA YANG KAMU DAPAT (proses kerja — jujur, tanpa testimoni fiktif)
       ══════════════════════════════════════════════ */}
-      <section id="reviews" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
-        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <section id="proses" ref={prosesParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+        {/* Parallax decorative number */}
+        <div style={{
+          position: 'absolute', top: '50%', right: '4%',
+          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+          color: 'rgba(255,214,0,0.035)', userSelect: 'none', pointerEvents: 'none',
+          transform: `translateY(${-50 + prosesParallax.offset * 0.06}%)`,
+          willChange: 'transform', zIndex: 0,
+        }}>05</div>
 
-          <div data-rid="testi-h" style={{ ...rv('testi-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+
+          <div data-rid="proses-h" style={{ ...rv('proses-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>
-              {s.hero_photos.length > 0 ? '05' : '04'} — Reviews
+              05 — Proses
             </span>
             <div>
               <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
-                Dari seller yang sudah <em style={{ color: '#FF4D00' }}>buktikan sendiri.</em>
+                Apa yang kamu <em style={{ color: '#FF4D00' }}>dapat</em> dari kami.
               </h2>
-              <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
-                Kami supply layanan live streaming ke seller di seluruh Indonesia dengan hasil yang terukur.
+              <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 460 }}>
+                Kami masih tahap awal membangun Iranza Live — jujur soal itu. Yang bisa kami pastikan: prosesnya jelas, dan kamu lihat sendiri hasilnya tiap sesi.
               </p>
             </div>
           </div>
 
-          <div data-rid="testi-track" style={{ ...rv('testi-track'), overflow: 'hidden', position: 'relative', margin: '0 -48px', padding: '0 48px' }}>
-            <div
-              ref={trackRef}
-              className="il-ttrack"
-              onMouseDown={onTrackDown} onMouseUp={onTrackUp}
-              onMouseLeave={onTrackUp} onMouseMove={onTrackMove}
-              style={{
-                display: 'flex', gap: 18,
-                overflowX: 'auto', scrollSnapType: 'x mandatory',
-                padding: '4px 48px 24px', margin: '0 -48px',
-                cursor: isDesktop ? (draggingRef.current ? 'grabbing' : 'grab') : 'auto',
-              }}
-            >
-              {s.testimonials.map((t, i) => (
-                <div key={i} className="il-tcard">
-                  <div style={{ color: '#FFD600', fontSize: 13, letterSpacing: 3, marginBottom: 20 }}>★★★★★</div>
-                  <p style={{ fontSize: 15, lineHeight: 1.85, color: 'rgba(242,239,232,0.55)', fontStyle: 'italic', marginBottom: 28 }}>"{t.text}"</p>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-                    <div style={{
-                      width: 44, height: 44, borderRadius: '50%',
-                      background: '#0A0A0A', border: '1px solid var(--border)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      fontSize: 19, flexShrink: 0,
-                    }}>{t.icon}</div>
-                    <div>
-                      <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 15, fontWeight: 700, color: '#F2EFE8' }}>{t.name}</div>
-                      <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', color: 'var(--muted)', marginTop: 3 }}>{t.role}</div>
-                    </div>
-                  </div>
+          <div
+            data-rid="proses-grid"
+            style={{ ...rv('proses-grid', 100), display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--border)' }}
+          >
+            {[
+              { step: '01', icon: '📞', title: 'Konsultasi', desc: 'Cerita soal produk & target kamu lewat WhatsApp. Kami bantu tentukan platform dan slot yang paling cocok.' },
+              { step: '02', icon: '📅', title: 'Booking Slot', desc: 'Pilih slot pagi/siang atau sore/malam. Kami konfirmasi jadwal host dan studio untuk sesi kamu.' },
+              { step: '03', icon: '🎙️', title: 'Live Berjalan', desc: 'Host kami yang bawakan sesi — kamu kirim produk, kami urus persiapan, kamera, dan interaksi penonton.' },
+              { step: '04', icon: '📊', title: 'Laporan Hasil', desc: 'Setelah sesi selesai, kamu terima data viewers, engagement, dan catatan apa yang bisa diperbaiki sesi depan.' },
+            ].map((p) => (
+              <div key={p.step} style={{ background: '#0D0D0D', padding: '36px 28px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
+                  <span style={{ fontSize: 26 }}>{p.icon}</span>
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted)', letterSpacing: '.1em' }}>{p.step}</span>
                 </div>
-              ))}
-            </div>
+                <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 19, fontWeight: 800, color: '#F2EFE8', marginBottom: 10 }}>{p.title}</div>
+                <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--muted)' }}>{p.desc}</p>
+              </div>
+            ))}
+          </div>
 
-            <div style={{ display: 'flex', gap: 10, marginTop: 28 }}>
-              {[-1, 1].map(dir => (
-                <button
-                  key={dir}
-                  onClick={() => scrollTesti(dir)}
-                  style={{
-                    width: 44, height: 44, border: '1px solid var(--border)', borderRadius: '50%',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: 18, color: 'var(--muted)',
-                    transition: 'border-color .2s, color .2s, background .2s',
-                  }}
-                  onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = '#FF4D00'; (e.currentTarget as HTMLButtonElement).style.color = 'white'; (e.currentTarget as HTMLButtonElement).style.background = '#FF4D00'; setCursorType('hover') }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'; (e.currentTarget as HTMLButtonElement).style.color = 'var(--muted)'; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; setCursorType('default') }}
-                >
-                  {dir === -1 ? '←' : '→'}
-                </button>
-              ))}
-            </div>
+          {/* Honest note */}
+          <div data-rid="proses-note" style={{
+            ...rv('proses-note', 200),
+            marginTop: 32, padding: '20px 28px',
+            border: '1px solid rgba(255,77,0,.2)', borderRadius: 4,
+            background: 'rgba(255,77,0,.04)',
+            display: 'flex', gap: 16, alignItems: 'flex-start',
+          }}>
+            <span style={{ fontSize: 20, flexShrink: 0 }}>💬</span>
+            <p style={{ fontSize: 13.5, lineHeight: 1.8, color: 'var(--muted)' }}>
+              Kami baru mulai melayani klien live streaming dan masih membangun jam terbang.
+              Yang kami tawarkan bukan jaminan viral, tapi proses kerja yang serius dan transparan —
+              host yang fokus, studio yang siap, dan laporan yang bisa kamu cek sendiri tiap sesi selesai.
+            </p>
           </div>
         </div>
       </section>
@@ -1352,7 +1375,7 @@ export default function LandingPage() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {[
                 [wa('Halo Iranza Live'), 'WhatsApp', true],
-                ['#reviews', 'Reviews', false],
+                ['#proses', 'Proses Kerja', false],
                 ['#about', 'About Us', false],
               ].map(([href, label, ext]) => (
                 <a key={label as string} href={href as string} target={ext ? '_blank' : undefined} rel={ext ? 'noopener' : undefined} className="il-footer-link" style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 16, fontWeight: 700, color: '#F2EFE8', display: 'flex', alignItems: 'center', gap: 6 }}>
