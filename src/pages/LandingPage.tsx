@@ -408,7 +408,7 @@ function BrandLogo({ logoUrl, size = 32 }: { logoUrl: string; size?: number }) {
   return (
     <div style={{
       fontFamily: "'Cabinet Grotesk', sans-serif",
-      fontWeight: 900, fontSize: size === 32 ? 18 : 22, letterSpacing: '-0.01em',
+      fontWeight: 900, fontSize: Math.round(size * 0.55), letterSpacing: '-0.01em',
       color: '#F2EFE8',
       display: 'flex', alignItems: 'center', gap: 8,
     }}>
@@ -766,7 +766,7 @@ export default function LandingPage() {
         transition: 'padding .4s, background .4s, border-bottom .4s',
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <BrandLogo logoUrl={s.logo_url} size={32} />
+          <BrandLogo logoUrl={s.logo_url} size={52} />
         </div>
 
         <div className="il-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
@@ -805,17 +805,6 @@ export default function LandingPage() {
         {/* Glow blobs */}
         <div style={{ position: 'absolute', width: 700, height: 700, borderRadius: '50%', background: 'radial-gradient(circle, rgba(255,77,0,.1) 0%, transparent 65%)', top: -200, right: -100, pointerEvents: 'none', zIndex: 1 }} />
         <div style={{ position: 'absolute', width: 500, height: 500, borderRadius: '50%', background: 'radial-gradient(circle, rgba(124,58,237,.08) 0%, transparent 70%)', bottom: 100, left: -80, pointerEvents: 'none', zIndex: 1 }} />
-
-        {/* Eyebrow */}
-        <div style={{
-          position: 'relative', zIndex: 3,
-          display: 'flex', alignItems: 'center', gap: 10,
-          fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase',
-          color: '#FF4D00', marginBottom: 28,
-        }}>
-          <span className="il-live-dot" />
-          Iranza Live &nbsp;—&nbsp; Creative Agency &nbsp;—&nbsp; Jakarta, Indonesia
-        </div>
 
         {/* Headline */}
         <h1 className="il-hero-h1" style={{
@@ -1342,7 +1331,7 @@ export default function LandingPage() {
         }}>
           <div>
             <div style={{ marginBottom: 20 }}>
-              <BrandLogo logoUrl={s.logo_url} size={36} />
+              <BrandLogo logoUrl={s.logo_url} size={48} />
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--muted)', maxWidth: 260 }}>
               Creative Agency untuk live streaming UMKM Indonesia. Shopee & TikTok Shop.
