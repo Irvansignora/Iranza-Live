@@ -12,11 +12,36 @@ const ROLE_CONFIG: Record<UserRole, { label: string; color: string; bg: string; 
   client:      { label: 'Client',      color: 'text-gold',    bg: 'bg-gold/10',    border: 'border-gold/30' },
 }
 
+// Calls the `manage-user` Edge Function, forwarding the caller's session JWT
+// so the function can verify they're an admin before doing anything.
+async function callManageUser(payload: Record<string, unknown>) {
+  const { data: sessionData } = await supabase.auth.getSession()
+  const token = sessionData.session?.access_token
+  if (!token) throw new Error('Sesi tidak valid — silakan login ulang')
+
+  const { data, error } = await supabase.functions.invoke('manage-user', {
+    body: payload,
+    headers: { Authorization: `Bearer ${token}` },
+  })
+
+  if (error) throw new Error(error.message)
+  if (data?.error) throw new Error(data.error)
+  return data
+}
+
+function generatePassword() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  let pw = ''
+  for (let i = 0; i < 10; i++) pw += chars[Math.floor(Math.random() * chars.length)]
+  return pw
+}
+
 export default function UsersPage() {
   const { profile: me } = useAuthStore()
   const [users, setUsers] = useState<Profile[]>([])
   const [loading, setLoading] = useState(true)
   const [showInvite, setShowInvite] = useState(false)
+  const [resetTarget, setResetTarget] = useState<Profile | null>(null)
   const [search, setSearch] = useState('')
 
   const isSuperAdmin = me?.role === 'super_admin'
@@ -159,14 +184,24 @@ export default function UsersPage() {
                     </td>
                     <td className="px-4 py-3 text-xs text-muted font-body">{formatDate(u.created_at)}</td>
                     <td className="px-4 py-3">
-                      {isSuperAdmin && !isMe && (
-                        <button
-                          onClick={() => handleToggleActive(u)}
-                          className="text-xs font-body text-muted hover:text-accent transition-colors px-2 py-1 border border-border rounded-lg hover:border-accent/30"
-                        >
-                          {u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
-                        </button>
-                      )}
+                      <div className="flex items-center gap-2">
+                        {isSuperAdmin && !isMe && (
+                          <button
+                            onClick={() => setResetTarget(u)}
+                            className="text-xs font-body text-muted hover:text-accent transition-colors px-2 py-1 border border-border rounded-lg hover:border-accent/30"
+                          >
+                            🔑 Set Password
+                          </button>
+                        )}
+                        {isSuperAdmin && !isMe && (
+                          <button
+                            onClick={() => handleToggleActive(u)}
+                            className="text-xs font-body text-muted hover:text-accent transition-colors px-2 py-1 border border-border rounded-lg hover:border-accent/30"
+                          >
+                            {u.is_active ? 'Nonaktifkan' : 'Aktifkan'}
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 )
@@ -178,36 +213,51 @@ export default function UsersPage() {
 
       {/* Invite Modal */}
       {showInvite && <InviteModal onClose={() => setShowInvite(false)} onInvited={loadUsers} />}
+
+      {/* Reset Password Modal */}
+      {resetTarget && <ResetPasswordModal user={resetTarget} onClose={() => setResetTarget(null)} />}
     </div>
   )
 }
 
 function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: () => void }) {
-  const [form, setForm] = useState({ email: '', full_name: '', role: 'client' as UserRole, company_name: '' })
+  const [form, setForm] = useState({ email: '', full_name: '', role: 'client' as UserRole, company_name: '', password: generatePassword() })
+  const [showPassword, setShowPassword] = useState(true)
   const [sending, setSending] = useState(false)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!form.email || !form.full_name || !form.password) {
+      toast.error('Nama, email, dan password wajib diisi')
+      return
+    }
+    if (form.password.length < 6) {
+      toast.error('Password minimal 6 karakter')
+      return
+    }
+
     setSending(true)
-
-    // Create user via Supabase Admin API (server-side in production)
-    // For now, use signUp — in production use a Supabase Edge Function
-    const { data, error } = await supabase.auth.signUp({
-      email: form.email,
-      password: Math.random().toString(36).slice(-10), // temp password
-      options: {
-        data: { full_name: form.full_name, role: form.role, company_name: form.company_name }
-      }
-    })
-
-    if (error) {
-      toast.error(`Gagal: ${error.message}`)
-    } else {
-      toast.success(`✅ Undangan dikirim ke ${form.email}`)
+    try {
+      await callManageUser({
+        action: 'create',
+        email: form.email,
+        password: form.password,
+        full_name: form.full_name,
+        role: form.role,
+        company_name: form.company_name || undefined,
+      })
+      toast.success(`✅ Akun ${form.email} dibuat — kirim email & password ini ke user`)
       onInvited()
       onClose()
+    } catch (err) {
+      toast.error(`Gagal: ${err instanceof Error ? err.message : 'unknown error'}`)
     }
     setSending(false)
+  }
+
+  const copyCredentials = () => {
+    navigator.clipboard.writeText(`Email: ${form.email}\nPassword: ${form.password}\nLogin di: ${window.location.origin}/login`)
+    toast.success('📋 Kredensial disalin ke clipboard')
   }
 
   return (
@@ -232,6 +282,47 @@ function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (
               />
             </div>
           ))}
+
+          {/* Password — admin sets this, not random/invisible anymore */}
+          <div>
+            <label className="block text-xs font-body text-muted mb-1 uppercase tracking-wider">Password *</label>
+            <div className="flex gap-2">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={form.password}
+                onChange={e => setForm(p => ({ ...p, password: e.target.value }))}
+                placeholder="Minimal 6 karakter"
+                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2 text-sm font-mono text-text placeholder-muted/50 focus:outline-none focus:border-accent transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                className="px-3 bg-surface2 border border-border rounded-xl text-xs text-muted hover:text-text"
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setForm(p => ({ ...p, password: generatePassword() }))}
+                className="px-3 bg-surface2 border border-border rounded-xl text-xs text-muted hover:text-text"
+                title="Generate password baru"
+              >
+                🎲
+              </button>
+            </div>
+            <p className="text-xs text-muted font-body mt-1.5">
+              Password ini langsung aktif. Catat / salin sebelum submit untuk dikirim ke user.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={copyCredentials}
+            className="w-full text-xs font-body text-accent hover:underline text-left"
+          >
+            📋 Salin email + password ke clipboard
+          </button>
+
           <div>
             <label className="block text-xs font-body text-muted mb-1 uppercase tracking-wider">Role *</label>
             <div className="grid grid-cols-2 gap-2">
@@ -255,7 +346,97 @@ function InviteModal({ onClose, onInvited }: { onClose: () => void; onInvited: (
               className="flex-1 py-2.5 bg-surface2 border border-border rounded-xl text-sm font-body text-muted">Batal</button>
             <button type="submit" disabled={sending}
               className="flex-1 py-2.5 bg-accent text-bg rounded-xl text-sm font-body font-bold hover:brightness-110 disabled:opacity-50">
-              {sending ? 'Mengirim...' : '📧 Undang'}
+              {sending ? 'Membuat...' : '✅ Buat Akun'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function ResetPasswordModal({ user, onClose }: { user: Profile; onClose: () => void }) {
+  const [password, setPassword] = useState(generatePassword())
+  const [showPassword, setShowPassword] = useState(true)
+  const [sending, setSending] = useState(false)
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (password.length < 6) {
+      toast.error('Password minimal 6 karakter')
+      return
+    }
+    setSending(true)
+    try {
+      await callManageUser({ action: 'reset_password', user_id: user.id, password })
+      toast.success(`✅ Password ${user.email} berhasil diubah`)
+      onClose()
+    } catch (err) {
+      toast.error(`Gagal: ${err instanceof Error ? err.message : 'unknown error'}`)
+    }
+    setSending(false)
+  }
+
+  const copyCredentials = () => {
+    navigator.clipboard.writeText(`Email: ${user.email}\nPassword baru: ${password}\nLogin di: ${window.location.origin}/login`)
+    toast.success('📋 Kredensial disalin ke clipboard')
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+      <div className="bg-surface border border-border rounded-2xl w-full max-w-sm">
+        <div className="flex items-center justify-between p-5 border-b border-border">
+          <h2 className="font-display tracking-widest text-text">SET PASSWORD</h2>
+          <button onClick={onClose} className="text-muted hover:text-text">✕</button>
+        </div>
+        <form onSubmit={handleSubmit} className="p-5 space-y-3">
+          <div className="bg-surface2 border border-border rounded-xl p-3">
+            <div className="text-sm font-body font-medium text-text">{user.full_name}</div>
+            <div className="text-xs text-muted font-body">{user.email}</div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-body text-muted mb-1 uppercase tracking-wider">Password Baru *</label>
+            <div className="flex gap-2">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Minimal 6 karakter"
+                className="flex-1 bg-surface2 border border-border rounded-xl px-3 py-2 text-sm font-mono text-text placeholder-muted/50 focus:outline-none focus:border-accent transition-colors"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(p => !p)}
+                className="px-3 bg-surface2 border border-border rounded-xl text-xs text-muted hover:text-text"
+              >
+                {showPassword ? '🙈' : '👁️'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setPassword(generatePassword())}
+                className="px-3 bg-surface2 border border-border rounded-xl text-xs text-muted hover:text-text"
+                title="Generate password baru"
+              >
+                🎲
+              </button>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={copyCredentials}
+            className="w-full text-xs font-body text-accent hover:underline text-left"
+          >
+            📋 Salin email + password ke clipboard
+          </button>
+
+          <div className="flex gap-2 pt-2">
+            <button type="button" onClick={onClose}
+              className="flex-1 py-2.5 bg-surface2 border border-border rounded-xl text-sm font-body text-muted">Batal</button>
+            <button type="submit" disabled={sending}
+              className="flex-1 py-2.5 bg-accent text-bg rounded-xl text-sm font-body font-bold hover:brightness-110 disabled:opacity-50">
+              {sending ? 'Menyimpan...' : '🔑 Ubah Password'}
             </button>
           </div>
         </form>
