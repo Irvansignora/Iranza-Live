@@ -8,6 +8,10 @@ import { useEffect, useRef, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { getCloudinaryThumbnail } from '@/lib/cloudinary'
+import { gsap } from 'gsap'
+import { ScrollTrigger } from 'gsap/ScrollTrigger'
+
+gsap.registerPlugin(ScrollTrigger)
 
 /* ─── Types ─────────────────────────────────────────── */
 interface HeroPhoto {
@@ -87,35 +91,31 @@ const SERVICES = [
 ]
 
 /* ─── Hooks ─────────────────────────────────────────── */
-function useParallax() {
-  const [scrollY, setScrollY] = useState(0)
-  useEffect(() => {
-    let raf = 0
-    const onScroll = () => {
-      cancelAnimationFrame(raf)
-      raf = requestAnimationFrame(() => setScrollY(window.scrollY))
-    }
-    window.addEventListener('scroll', onScroll, { passive: true })
-    return () => { window.removeEventListener('scroll', onScroll); cancelAnimationFrame(raf) }
-  }, [])
-  return scrollY
-}
 
-/** Returns a ref to attach to a section, plus that section's vertical
- * offset (in px, can be negative) from the viewport center — used to
- * drive subtle parallax movement on background/decorative elements
- * inside that section as the user scrolls past it. */
-function useParallaxOffset(scrollY: number) {
-  const ref = useRef<HTMLDivElement>(null)
-  const [offset, setOffset] = useState(0)
+/** Attaches a GSAP ScrollTrigger-driven parallax to a section. The
+ * decorative background element (passed via bgRef) moves at a different
+ * speed than the foreground content as the section scrolls through the
+ * viewport — classic layered-parallax depth effect. */
+function useGsapParallax(speed = 0.15) {
+  const sectionRef = useRef<HTMLElement>(null)
+  const bgRef = useRef<HTMLDivElement>(null)
+
   useEffect(() => {
-    if (!ref.current) return
-    const rect = ref.current.getBoundingClientRect()
-    const viewportCenter = window.innerHeight / 2
-    const elCenter = rect.top + rect.height / 2
-    setOffset(elCenter - viewportCenter)
-  }, [scrollY])
-  return { ref, offset }
+    if (!sectionRef.current || !bgRef.current) return
+    const tween = gsap.to(bgRef.current, {
+      yPercent: speed * 100,
+      ease: 'none',
+      scrollTrigger: {
+        trigger: sectionRef.current,
+        start: 'top bottom',
+        end: 'bottom top',
+        scrub: true,
+      },
+    })
+    return () => { tween.scrollTrigger?.kill(); tween.kill() }
+  }, [speed])
+
+  return { sectionRef, bgRef }
 }
 
 function useReveal() {
@@ -432,16 +432,136 @@ function BrandLogo({ logoUrl, size = 32 }: { logoUrl: string; size?: number }) {
   )
 }
 
+/* ─── Apa yang Kamu Dapat — pinned GSAP scroll-story ──── */
+const PROSES_STEPS = [
+  { step: '01', icon: '📞', title: 'Konsultasi', desc: 'Cerita soal produk & target kamu lewat WhatsApp. Kami bantu tentukan platform dan slot yang paling cocok.' },
+  { step: '02', icon: '📅', title: 'Booking Slot', desc: 'Pilih slot pagi/siang atau sore/malam. Kami konfirmasi jadwal host dan studio untuk sesi kamu.' },
+  { step: '03', icon: '🎙️', title: 'Live Berjalan', desc: 'Host kami yang bawakan sesi — kamu kirim produk, kami urus persiapan, kamera, dan interaksi penonton.' },
+  { step: '04', icon: '📊', title: 'Laporan Hasil', desc: 'Setelah sesi selesai, kamu terima data viewers, engagement, dan catatan apa yang bisa diperbaiki sesi depan.' },
+]
+
+function ProsesScrollStory({ sectionNum }: { sectionNum: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const pinRef = useRef<HTMLDivElement>(null)
+  const stepRefs = useRef<(HTMLDivElement | null)[]>([])
+  const progressRef = useRef<HTMLDivElement>(null)
+  const [isDesktopStory, setIsDesktopStory] = useState(true)
+
+  useEffect(() => {
+    setIsDesktopStory(window.matchMedia('(min-width:769px)').matches)
+  }, [])
+
+  useEffect(() => {
+    if (!isDesktopStory) return // pinned scroll-story is desktop-only; mobile gets a simple stacked layout below
+    if (!wrapRef.current || !pinRef.current) return
+
+    const steps = stepRefs.current.filter(Boolean) as HTMLDivElement[]
+    if (steps.length === 0) return
+
+    // Start every step hidden except the first
+    steps.forEach((el, i) => {
+      gsap.set(el, { opacity: i === 0 ? 1 : 0, y: i === 0 ? 0 : 40, scale: i === 0 ? 1 : 0.96 })
+    })
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: wrapRef.current,
+        start: 'top top',
+        end: `+=${steps.length * 100}%`,
+        scrub: 0.4,
+        pin: pinRef.current,
+        pinSpacing: true,
+        onUpdate: (self) => {
+          if (progressRef.current) {
+            progressRef.current.style.width = `${self.progress * 100}%`
+          }
+        },
+      },
+    })
+
+    steps.forEach((el, i) => {
+      if (i === 0) return
+      const prev = steps[i - 1]
+      tl.to(prev, { opacity: 0, y: -30, scale: 0.96, duration: 0.35, ease: 'power2.in' })
+        .fromTo(el, { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'power2.out' })
+    })
+
+    return () => { tl.scrollTrigger?.kill(); tl.kill() }
+  }, [isDesktopStory])
+
+  if (!isDesktopStory) {
+    // Mobile fallback: simple stacked cards, no pin (pinning is unreliable on mobile viewports/URL bars)
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        {PROSES_STEPS.map((p) => (
+          <div key={p.step} style={{ background: '#0D0D0D', border: '1px solid var(--border)', borderRadius: 8, padding: '28px 24px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
+              <span style={{ fontSize: 24 }}>{p.icon}</span>
+              <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted)', letterSpacing: '.1em' }}>{p.step}</span>
+            </div>
+            <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 800, color: '#F2EFE8', marginBottom: 8 }}>{p.title}</div>
+            <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--muted)' }}>{p.desc}</p>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div ref={pinRef} style={{ minHeight: '70vh', display: 'flex', alignItems: 'center' }}>
+        <div style={{ width: '100%' }}>
+          <div style={{ position: 'relative', height: 320 }}>
+            {PROSES_STEPS.map((p, i) => (
+              <div
+                key={p.step}
+                ref={el => { stepRefs.current[i] = el }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  display: 'grid', gridTemplateColumns: '120px 1fr', gap: 40, alignItems: 'center',
+                }}
+              >
+                <div style={{
+                  width: 100, height: 100, borderRadius: '50%',
+                  border: '1px solid var(--border)', background: '#0D0D0D',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 38, flexShrink: 0,
+                }}>{p.icon}</div>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 14 }}>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: '#FF4D00', letterSpacing: '.1em' }}>{sectionNum}.{p.step}</span>
+                    <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(28px,3.5vw,42px)', fontWeight: 900, color: '#F2EFE8', letterSpacing: '-0.02em' }}>{p.title}</div>
+                  </div>
+                  <p style={{ fontSize: 16, lineHeight: 1.85, color: 'var(--muted)', maxWidth: 560 }}>{p.desc}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar + step indicators */}
+          <div style={{ marginTop: 48, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ flex: 1, height: 2, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+              <div ref={progressRef} style={{ height: '100%', width: '0%', background: '#FF4D00', borderRadius: 2 }} />
+            </div>
+            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted)', letterSpacing: '.1em', whiteSpace: 'nowrap' }}>
+              {String(PROSES_STEPS.length).padStart(2, '0')} Langkah
+            </span>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Main Component ─────────────────────────────────── */
 export default function LandingPage() {
   const [s, setS] = useState<LandingSettings>(DEFAULT)
   const [scrolled, setScrolled] = useState(false)
   const [activeService, setActiveService] = useState<string | null>(null)
   const visible = useReveal()
-  const scrollY = useParallax()
-  const servicesParallax = useParallaxOffset(scrollY)
-  const workParallax = useParallaxOffset(scrollY)
-  const prosesParallax = useParallaxOffset(scrollY)
+  const servicesParallax = useGsapParallax(0.18)
+  const workParallax = useGsapParallax(0.22)
+  const prosesParallax = useGsapParallax(0.18)
   const cursorRef = useRef<HTMLDivElement>(null)
   const cursorRingRef = useRef<HTMLDivElement>(null)
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
@@ -848,16 +968,17 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           SERVICES
       ══════════════════════════════════════════════ */}
-      <section id="services" ref={servicesParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
-        {/* Parallax decorative number */}
-        <div style={{
-          position: 'absolute', top: '50%', right: '4%',
-          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
-          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
-          color: 'rgba(255,77,0,0.035)', userSelect: 'none', pointerEvents: 'none',
-          transform: `translateY(${-50 + servicesParallax.offset * 0.06}%)`,
-          willChange: 'transform', zIndex: 0,
-        }}>01</div>
+      <section id="services" ref={servicesParallax.sectionRef} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+        {/* Parallax decorative number — moves at a different speed than content via GSAP ScrollTrigger.
+            Outer div handles static vertical centering; inner div (bgRef) is fully owned by GSAP. */}
+        <div style={{ position: 'absolute', top: '50%', right: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
+          <div ref={servicesParallax.bgRef} style={{
+            fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+            fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+            color: 'rgba(255,77,0,0.035)', userSelect: 'none', pointerEvents: 'none',
+            willChange: 'transform',
+          }}>01</div>
+        </div>
 
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
@@ -941,16 +1062,16 @@ export default function LandingPage() {
           Selalu render — kalau belum ada foto, tampilkan fallback jujur
           alih-alih section kosong (supaya anchor #work selalu punya isi).
       ══════════════════════════════════════════════ */}
-      <section id="work" ref={workParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+      <section id="work" ref={workParallax.sectionRef} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
         {/* Parallax decorative number */}
-        <div style={{
-          position: 'absolute', top: '50%', left: '4%',
-          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
-          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
-          color: 'rgba(124,58,237,0.04)', userSelect: 'none', pointerEvents: 'none',
-          transform: `translateY(${-50 + workParallax.offset * 0.06}%)`,
-          willChange: 'transform', zIndex: 0,
-        }}>02</div>
+        <div style={{ position: 'absolute', top: '50%', left: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
+          <div ref={workParallax.bgRef} style={{
+            fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+            fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+            color: 'rgba(124,58,237,0.04)', userSelect: 'none', pointerEvents: 'none',
+            willChange: 'transform',
+          }}>02</div>
+        </div>
 
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
@@ -1223,18 +1344,18 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           APA YANG KAMU DAPAT (proses kerja — jujur, tanpa testimoni fiktif)
       ══════════════════════════════════════════════ */}
-      <section id="proses" ref={prosesParallax.ref} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+      <section id="proses" ref={prosesParallax.sectionRef} style={{ padding: '100px 48px 0', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
         {/* Parallax decorative number */}
-        <div style={{
-          position: 'absolute', top: '50%', right: '4%',
-          fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
-          fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
-          color: 'rgba(255,214,0,0.035)', userSelect: 'none', pointerEvents: 'none',
-          transform: `translateY(${-50 + prosesParallax.offset * 0.06}%)`,
-          willChange: 'transform', zIndex: 0,
-        }}>05</div>
+        <div style={{ position: 'absolute', top: '30%', right: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
+          <div ref={prosesParallax.bgRef} style={{
+            fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+            fontSize: 'clamp(180px,26vw,420px)', lineHeight: 1,
+            color: 'rgba(255,214,0,0.035)', userSelect: 'none', pointerEvents: 'none',
+            willChange: 'transform',
+          }}>05</div>
+        </div>
 
-        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, paddingBottom: 100 }}>
 
           <div data-rid="proses-h" style={{ ...rv('proses-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>
@@ -1250,25 +1371,8 @@ export default function LandingPage() {
             </div>
           </div>
 
-          <div
-            data-rid="proses-grid"
-            style={{ ...rv('proses-grid', 100), display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 1, background: 'var(--border)' }}
-          >
-            {[
-              { step: '01', icon: '📞', title: 'Konsultasi', desc: 'Cerita soal produk & target kamu lewat WhatsApp. Kami bantu tentukan platform dan slot yang paling cocok.' },
-              { step: '02', icon: '📅', title: 'Booking Slot', desc: 'Pilih slot pagi/siang atau sore/malam. Kami konfirmasi jadwal host dan studio untuk sesi kamu.' },
-              { step: '03', icon: '🎙️', title: 'Live Berjalan', desc: 'Host kami yang bawakan sesi — kamu kirim produk, kami urus persiapan, kamera, dan interaksi penonton.' },
-              { step: '04', icon: '📊', title: 'Laporan Hasil', desc: 'Setelah sesi selesai, kamu terima data viewers, engagement, dan catatan apa yang bisa diperbaiki sesi depan.' },
-            ].map((p) => (
-              <div key={p.step} style={{ background: '#0D0D0D', padding: '36px 28px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                  <span style={{ fontSize: 26 }}>{p.icon}</span>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: 'var(--muted)', letterSpacing: '.1em' }}>{p.step}</span>
-                </div>
-                <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 19, fontWeight: 800, color: '#F2EFE8', marginBottom: 10 }}>{p.title}</div>
-                <p style={{ fontSize: 13.5, lineHeight: 1.75, color: 'var(--muted)' }}>{p.desc}</p>
-              </div>
-            ))}
+          <div data-rid="proses-grid" style={rv('proses-grid', 100)}>
+            <ProsesScrollStory sectionNum="05" />
           </div>
 
           {/* Honest note */}
