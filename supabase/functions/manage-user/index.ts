@@ -14,9 +14,10 @@
 // Required secrets (set once):
 //   supabase secrets set SUPABASE_URL=https://xxxx.supabase.co
 //   supabase secrets set SUPABASE_SERVICE_ROLE_KEY=eyJ...
-// (SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are auto-injected by Supabase
-//  in most projects already — only set them manually if the function can't
-//  find them.)
+//   supabase secrets set SUPABASE_ANON_KEY=eyJ...
+// (SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY and SUPABASE_ANON_KEY are
+//  auto-injected by Supabase in most projects already — only set them
+//  manually if the function can't find them.)
 
 import { createClient } from 'npm:@supabase/supabase-js@2'
 
@@ -37,8 +38,11 @@ Deno.serve(async (req: Request) => {
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!
 
-    // Client using the CALLER's JWT — used only to verify who is calling
+    // Client using the CALLER's JWT — used only to verify who is calling.
+    // IMPORTANT: must use the ANON key here (not service_role) so that
+    // auth.getUser() correctly validates the user's own access token.
     const authHeader = req.headers.get('Authorization')
     if (!authHeader) {
       return new Response(JSON.stringify({ error: 'Missing Authorization header' }), {
@@ -46,7 +50,7 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const callerClient = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
+    const callerClient = createClient(SUPABASE_URL, ANON_KEY, {
       global: { headers: { Authorization: authHeader } },
     })
 
