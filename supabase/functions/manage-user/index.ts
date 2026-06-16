@@ -1,5 +1,5 @@
 // supabase/functions/manage-user/index.ts
-//
+
 // Edge Function: manage-user
 // Lets a super_admin/admin create a new user WITH a password they set
 // (instead of Supabase's signUp(), which can only set a random throwaway
