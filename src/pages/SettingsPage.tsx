@@ -18,6 +18,7 @@ interface LandingSettings {
   tagline: string
   subtagline: string
   whatsapp_number: string
+  logo_url: string
   hero_headline_1: string
   hero_headline_2: string
   hero_subtext: string
@@ -43,6 +44,7 @@ const DEFAULT: LandingSettings = {
   tagline: 'TINGKATKAN PENJUALAN LEWAT LIVE STREAMING',
   subtagline: 'Jasa live streaming profesional untuk UMKM di Shopee & TikTok Shop.',
   whatsapp_number: '6285776077292',
+  logo_url: '',
   hero_headline_1: 'Studio Live',
   hero_headline_2: 'untuk UMKM.',
   hero_subtext: 'Host profesional. Studio siap. Hasil terukur — di Shopee & TikTok Shop.',
@@ -70,9 +72,10 @@ const DEFAULT: LandingSettings = {
   cta_sub: 'Hubungi kami sekarang dan dapatkan konsultasi gratis untuk strategi live streaming terbaik buat bisnis kamu.',
 }
 
-type TabKey = 'photos' | 'hero' | 'pricing' | 'features' | 'cta'
+type TabKey = 'branding' | 'photos' | 'hero' | 'pricing' | 'features' | 'cta'
 
 const TABS: { key: TabKey; label: string; icon: string }[] = [
+  { key: 'branding', label: 'Logo & Favicon', icon: '🔵' },
   { key: 'photos', label: 'Foto Landing Page', icon: '🖼️' },
   { key: 'hero', label: 'Hero & Kontak', icon: '🏠' },
   { key: 'pricing', label: 'Harga & Slot', icon: '💰' },
@@ -110,6 +113,115 @@ function Input({ label, value, onChange, multiline = false, placeholder = '', hi
         />
       )}
       {hint && <p className="text-xs text-muted font-body mt-1.5">{hint}</p>}
+    </div>
+  )
+}
+
+/* ─── Branding Tab (Logo + Favicon) ─── */
+function BrandingTab({
+  logoUrl,
+  onChange,
+}: {
+  logoUrl: string
+  onChange: (url: string) => void
+}) {
+  const [uploading, setUploading] = useState(false)
+  const [dragOver, setDragOver] = useState(false)
+
+  const handleUpload = useCallback(async (files: FileList | null) => {
+    if (!files || files.length === 0) return
+    const file = files[0]
+
+    if (!file.type.startsWith('image/')) {
+      toast.error('Logo harus berupa gambar (PNG/SVG/JPG)')
+      return
+    }
+
+    setUploading(true)
+    try {
+      toast.loading('Mengupload logo...', { id: 'logo-upload' })
+      const result = await uploadToCloudinary(file, {
+        folder: 'iranza-live/branding',
+        tags: ['logo', 'branding'],
+      })
+      onChange(result.secure_url)
+      toast.success('✅ Logo berhasil diupload — jangan lupa Simpan Perubahan', { id: 'logo-upload' })
+    } catch (err) {
+      toast.error('Gagal upload logo', { id: 'logo-upload' })
+      console.error(err)
+    }
+    setUploading(false)
+  }, [onChange])
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault()
+    setDragOver(false)
+    handleUpload(e.dataTransfer.files)
+  }, [handleUpload])
+
+  return (
+    <div className="space-y-6">
+      <div className="bg-accent/5 border border-accent/20 rounded-2xl p-4 flex gap-3 items-start">
+        <span className="text-xl">🔵</span>
+        <div>
+          <div className="font-body font-semibold text-text text-sm">Logo dipakai di dua tempat otomatis</div>
+          <div className="text-muted text-xs font-body mt-1">
+            (1) Pojok kiri atas <strong className="text-text">landing page</strong> (navbar & footer),
+            (2) <strong className="text-text">favicon</strong> tab browser di seluruh aplikasi. Rekomendasi: PNG transparan atau SVG, persegi (1:1), minimal 256×256px.
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-surface border border-border rounded-2xl p-6 space-y-4">
+        <h3 className="font-display text-lg tracking-widest text-text">LOGO IRANZA LIVE</h3>
+
+        <div className="flex items-center gap-6">
+          {/* Current logo preview */}
+          <div className="w-24 h-24 bg-surface2 border border-border rounded-2xl flex items-center justify-center overflow-hidden flex-shrink-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo preview" className="w-full h-full object-contain p-2" />
+            ) : (
+              <span className="text-3xl opacity-30">🔵</span>
+            )}
+          </div>
+
+          {/* Upload zone */}
+          <div
+            onDrop={handleDrop}
+            onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+            onDragLeave={() => setDragOver(false)}
+            className={`flex-1 border-2 border-dashed rounded-2xl p-5 text-center transition-all ${
+              dragOver ? 'border-accent bg-accent/5' : 'border-border hover:border-accent/50'
+            }`}
+          >
+            {uploading ? (
+              <div className="text-sm font-body text-text">⬆️ Mengupload...</div>
+            ) : (
+              <>
+                <div className="font-body text-sm text-text mb-1">Drag & drop logo di sini</div>
+                <label className="inline-flex items-center gap-2 bg-accent text-bg px-4 py-1.5 rounded-lg font-bold text-xs cursor-pointer hover:brightness-110 transition-all mt-2">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    onChange={e => handleUpload(e.target.files)}
+                    className="hidden"
+                  />
+                  Pilih Logo
+                </label>
+              </>
+            )}
+          </div>
+        </div>
+
+        {logoUrl && (
+          <button
+            onClick={() => onChange('')}
+            className="text-xs text-muted hover:text-accent2 font-body transition-colors"
+          >
+            ✕ Hapus logo (kembali ke teks "IranzaLive")
+          </button>
+        )}
+      </div>
     </div>
   )
 }
@@ -334,7 +446,7 @@ export default function SettingsPage() {
   const [settings, setSettings] = useState<LandingSettings>(DEFAULT)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [activeTab, setActiveTab] = useState<TabKey>('photos')
+  const [activeTab, setActiveTab] = useState<TabKey>('branding')
 
   useEffect(() => {
     supabase
@@ -430,6 +542,9 @@ export default function SettingsPage() {
             }`}
           >
             {tab.icon} {tab.label}
+            {tab.key === 'branding' && settings.logo_url && (
+              <span className="text-accent3">✓</span>
+            )}
             {tab.key === 'photos' && settings.hero_photos.length > 0 && (
               <span className="bg-accent/20 text-accent text-xs px-1.5 py-0.5 rounded-full font-mono">
                 {settings.hero_photos.length}
@@ -441,6 +556,14 @@ export default function SettingsPage() {
 
       {/* Tab content */}
       <div className="space-y-6">
+
+        {/* ── LOGO & FAVICON ── */}
+        {activeTab === 'branding' && (
+          <BrandingTab
+            logoUrl={settings.logo_url}
+            onChange={url => set('logo_url', url)}
+          />
+        )}
 
         {/* ── FOTO LANDING PAGE ── */}
         {activeTab === 'photos' && (
