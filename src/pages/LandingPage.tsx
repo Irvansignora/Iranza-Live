@@ -17,6 +17,7 @@ interface HeroPhoto {
 
 interface LandingSettings {
   whatsapp_number: string
+  logo_url: string
   slot_pagi_times: string
   slot_malam_times: string
   prices: {
@@ -32,6 +33,7 @@ interface LandingSettings {
 
 const DEFAULT: LandingSettings = {
   whatsapp_number: '6285776077292',
+  logo_url: '',
   slot_pagi_times: '05.00–09.00 · 11.00–14.00 WIB',
   slot_malam_times: '16.00–18.00 · 20.00–02.00 WIB',
   hero_headline_1: 'Studio Live',
@@ -392,6 +394,30 @@ function PhotoStrip({ photos }: { photos: HeroPhoto[] }) {
   )
 }
 
+/* ─── Brand Logo (image from Cloudinary, falls back to text) ──── */
+function BrandLogo({ logoUrl, size = 32 }: { logoUrl: string; size?: number }) {
+  if (logoUrl) {
+    return (
+      <img
+        src={logoUrl}
+        alt="Iranza Live"
+        style={{ height: size, width: 'auto', objectFit: 'contain', display: 'block' }}
+      />
+    )
+  }
+  return (
+    <div style={{
+      fontFamily: "'Cabinet Grotesk', sans-serif",
+      fontWeight: 900, fontSize: size === 32 ? 18 : 22, letterSpacing: '-0.01em',
+      color: '#F2EFE8',
+      display: 'flex', alignItems: 'center', gap: 8,
+    }}>
+      <span className="il-live-dot" />
+      Iranza<span style={{ color: '#FF4D00' }}>Live</span>
+    </div>
+  )
+}
+
 /* ─── Main Component ─────────────────────────────────── */
 export default function LandingPage() {
   const [s, setS] = useState<LandingSettings>(DEFAULT)
@@ -739,14 +765,8 @@ export default function LandingPage() {
         borderBottom: scrolled ? '1px solid var(--border)' : 'none',
         transition: 'padding .4s, background .4s, border-bottom .4s',
       }}>
-        <div style={{
-          fontFamily: "'Cabinet Grotesk', sans-serif",
-          fontWeight: 900, fontSize: 18, letterSpacing: '-0.01em',
-          color: '#F2EFE8',
-          display: 'flex', alignItems: 'center', gap: 8,
-        }}>
-          <span className="il-live-dot" />
-          Iranza<span style={{ color: '#FF4D00' }}>Live</span>
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <BrandLogo logoUrl={s.logo_url} size={32} />
         </div>
 
         <div className="il-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
@@ -1321,13 +1341,8 @@ export default function LandingPage() {
           gap: 40, padding: '56px 0', borderBottom: '1px solid var(--border)',
         }}>
           <div>
-            <div style={{
-              fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
-              fontSize: 22, letterSpacing: '-0.01em', color: '#F2EFE8',
-              display: 'flex', alignItems: 'center', gap: 8, marginBottom: 20,
-            }}>
-              <span className="il-live-dot" />
-              Iranza<span style={{ color: '#FF4D00' }}>Live</span>
+            <div style={{ marginBottom: 20 }}>
+              <BrandLogo logoUrl={s.logo_url} size={36} />
             </div>
             <p style={{ fontSize: 14, lineHeight: 1.75, color: 'var(--muted)', maxWidth: 260 }}>
               Creative Agency untuk live streaming UMKM Indonesia. Shopee & TikTok Shop.
