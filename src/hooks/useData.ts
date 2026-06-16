@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useAppStore } from '@/store/appStore'
 import { useAuthStore } from '@/store/authStore'
-import type { Client, LiveSession, SessionMetrics, ViewerTimeline, MediaAsset } from '@/lib/database.types'
+import type { Client, LiveSession, SessionMetrics, ViewerTimeline, MediaAsset, PlatformType } from '@/lib/database.types'
 
 // ── Clients hook ──
 export function useClients() {
@@ -62,7 +62,22 @@ export function useSessionMetrics(sessionId: string | null) {
   return { metrics, timeline }
 }
 
-// ── Dashboard summary stats hook ──
+function periodToRange(period: 'today' | '7d' | '30d') {
+  const now = new Date()
+  let from: Date
+  if (period === 'today') {
+    from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  } else if (period === '7d') {
+    from = new Date(now.getTime() - 7 * 24 * 3600 * 1000)
+  } else {
+    from = new Date(now.getTime() - 30 * 24 * 3600 * 1000)
+  }
+  const spanMs = now.getTime() - from.getTime()
+  const prevFrom = new Date(from.getTime() - spanMs)
+  return { from, to: now, prevFrom, prevTo: from }
+}
+
+// ── Dashboard summary stats hook (with real period-over-period change %) ──
 export function useDashboardStats(period: 'today' | '7d' | '30d') {
   const [stats, setStats] = useState({
     totalSessions: 0,
@@ -71,49 +86,65 @@ export function useDashboardStats(period: 'today' | '7d' | '30d') {
     totalRevenue: 0,
     totalFollowers: 0,
     avgEngagement: 0,
+    changeViewers: 0,
+    changeRevenue: 0,
+    changeFollowers: 0,
+    changeSessions: 0,
+    changeEngagement: 0,
   })
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    async function load() {
-      setLoading(true)
-
-      const now = new Date()
-      let from: Date
-      if (period === 'today') {
-        from = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      } else if (period === '7d') {
-        from = new Date(now.getTime() - 7 * 24 * 3600 * 1000)
-      } else {
-        from = new Date(now.getTime() - 30 * 24 * 3600 * 1000)
-      }
-
+    async function loadRange(from: Date, to: Date) {
       const { data: sessions } = await supabase
         .from('live_sessions')
         .select('id, status')
         .gte('scheduled_start', from.toISOString())
+        .lt('scheduled_start', to.toISOString())
 
       const sessionIds = sessions?.map(s => s.id) || []
-
-      if (sessionIds.length > 0) {
-        const { data: metrics } = await supabase
-          .from('session_metrics')
-          .select('*')
-          .in('session_id', sessionIds)
-
-        const m = metrics || []
-        setStats({
-          totalSessions: sessions?.length || 0,
-          liveSessions: sessions?.filter(s => s.status === 'live').length || 0,
-          totalViewers: m.reduce((sum, r) => sum + (r.peak_viewers || 0), 0),
-          totalRevenue: m.reduce((sum, r) => sum + (r.total_revenue || 0), 0),
-          totalFollowers: m.reduce((sum, r) => sum + (r.new_followers || 0), 0),
-          avgEngagement: m.length ? m.reduce((sum, r) => sum + (r.engagement_rate || 0), 0) / m.length : 0,
-        })
-      } else {
-        setStats({ totalSessions: 0, liveSessions: 0, totalViewers: 0, totalRevenue: 0, totalFollowers: 0, avgEngagement: 0 })
+      if (sessionIds.length === 0) {
+        return { totalSessions: 0, liveSessions: 0, totalViewers: 0, totalRevenue: 0, totalFollowers: 0, avgEngagement: 0 }
       }
 
+      const { data: metrics } = await supabase
+        .from('session_metrics')
+        .select('*')
+        .in('session_id', sessionIds)
+
+      const m = metrics || []
+      return {
+        totalSessions: sessions?.length || 0,
+        liveSessions: sessions?.filter(s => s.status === 'live').length || 0,
+        totalViewers: m.reduce((sum, r) => sum + (r.peak_viewers || 0), 0),
+        totalRevenue: m.reduce((sum, r) => sum + (r.total_revenue || 0), 0),
+        totalFollowers: m.reduce((sum, r) => sum + (r.new_followers || 0), 0),
+        avgEngagement: m.length ? m.reduce((sum, r) => sum + (r.engagement_rate || 0), 0) / m.length : 0,
+      }
+    }
+
+    function pctChange(curr: number, prev: number) {
+      if (prev === 0) return curr > 0 ? 100 : 0
+      return ((curr - prev) / prev) * 100
+    }
+
+    async function load() {
+      setLoading(true)
+      const { from, to, prevFrom, prevTo } = periodToRange(period)
+
+      const [current, previous] = await Promise.all([
+        loadRange(from, to),
+        loadRange(prevFrom, prevTo),
+      ])
+
+      setStats({
+        ...current,
+        changeViewers: pctChange(current.totalViewers, previous.totalViewers),
+        changeRevenue: pctChange(current.totalRevenue, previous.totalRevenue),
+        changeFollowers: pctChange(current.totalFollowers, previous.totalFollowers),
+        changeSessions: pctChange(current.totalSessions, previous.totalSessions),
+        changeEngagement: pctChange(current.avgEngagement, previous.avgEngagement),
+      })
       setLoading(false)
     }
 
@@ -121,6 +152,274 @@ export function useDashboardStats(period: 'today' | '7d' | '30d') {
   }, [period])
 
   return { stats, loading }
+}
+
+// ── Viewer trend hook — real per-hour viewer counts per studio, from viewer_timeline ──
+export interface ViewerTrendPoint {
+  time: string
+  [studioName: string]: string | number
+}
+
+export function useViewerTrend(date?: Date) {
+  const [data, setData] = useState<ViewerTrendPoint[]>([])
+  const [studioNames, setStudioNames] = useState<string[]>([])
+  const [loading, setLoading] = useState(true)
+  const [hasData, setHasData] = useState(false)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const day = date || new Date()
+      const dayStart = new Date(day.getFullYear(), day.getMonth(), day.getDate())
+      const dayEnd = new Date(dayStart.getTime() + 24 * 3600 * 1000)
+
+      // Sessions scheduled today, joined to their studio name
+      const { data: sessions } = await supabase
+        .from('live_sessions')
+        .select('id, studio_id, studio:studios(name)')
+        .gte('scheduled_start', dayStart.toISOString())
+        .lt('scheduled_start', dayEnd.toISOString())
+
+      type RawSession = { id: string; studio_id: string | null; studio: { name: string } | { name: string }[] | null }
+      const sessionList = ((sessions || []) as unknown as RawSession[]).map(s => ({
+        id: s.id,
+        studio_id: s.studio_id,
+        studio: Array.isArray(s.studio) ? s.studio[0] : s.studio,
+      }))
+
+      if (sessionList.length === 0) {
+        setData([])
+        setStudioNames([])
+        setHasData(false)
+        setLoading(false)
+        return
+      }
+
+      const sessionIds = sessionList.map(s => s.id)
+      const { data: timeline } = await supabase
+        .from('viewer_timeline')
+        .select('session_id, timestamp, viewer_count')
+        .in('session_id', sessionIds)
+        .order('timestamp')
+
+      const points = (timeline || []) as Array<{ session_id: string; timestamp: string; viewer_count: number }>
+
+      if (points.length === 0) {
+        setData([])
+        setStudioNames(Array.from(new Set(sessionList.map(s => s.studio?.name || 'Studio'))))
+        setHasData(false)
+        setLoading(false)
+        return
+      }
+
+      // Map session_id -> studio name
+      const sessionToStudio = new Map(sessionList.map(s => [s.id, s.studio?.name || 'Studio']))
+      const names = Array.from(new Set(sessionList.map(s => s.studio?.name || 'Studio')))
+
+      // Bucket by hour, per studio
+      const buckets = new Map<string, ViewerTrendPoint>()
+      for (const p of points) {
+        const hour = new Date(p.timestamp)
+        const label = `${String(hour.getHours()).padStart(2, '0')}:00`
+        const studioName = sessionToStudio.get(p.session_id) || 'Studio'
+
+        if (!buckets.has(label)) {
+          const point: ViewerTrendPoint = { time: label }
+          names.forEach(n => { point[n] = 0 })
+          buckets.set(label, point)
+        }
+        const bucket = buckets.get(label)!
+        bucket[studioName] = Math.max(Number(bucket[studioName] || 0), p.viewer_count)
+      }
+
+      const sorted = Array.from(buckets.values()).sort((a, b) => a.time.localeCompare(b.time))
+      setData(sorted)
+      setStudioNames(names)
+      setHasData(true)
+      setLoading(false)
+    }
+
+    load()
+  }, [date])
+
+  return { data, studioNames, loading, hasData }
+}
+
+// ── Platform split hook — real distribution of sessions/viewers by platform ──
+export interface PlatformSplitItem {
+  name: string
+  value: number
+  color: string
+}
+
+const PLATFORM_COLORS: Record<string, string> = {
+  tiktok: '#00e5ff',
+  shopee: '#ff3d6b',
+  instagram: '#a3ff6b',
+  youtube: '#ffc93c',
+  tokopedia: '#8b5cf6',
+  lazada: '#fb923c',
+  other: '#5c6b7a',
+}
+
+const PLATFORM_LABELS_MAP: Record<string, string> = {
+  tiktok: 'TikTok', shopee: 'Shopee', instagram: 'Instagram', youtube: 'YouTube',
+  tokopedia: 'Tokopedia', lazada: 'Lazada', other: 'Lainnya',
+}
+
+export function usePlatformSplit(period: 'today' | '7d' | '30d') {
+  const [data, setData] = useState<PlatformSplitItem[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const { from, to } = periodToRange(period)
+
+      const { data: sessions } = await supabase
+        .from('live_sessions')
+        .select('id, platform')
+        .gte('scheduled_start', from.toISOString())
+        .lt('scheduled_start', to.toISOString())
+
+      const list = (sessions || []) as Array<{ id: string; platform: PlatformType }>
+      if (list.length === 0) {
+        setData([])
+        setLoading(false)
+        return
+      }
+
+      const sessionIds = list.map(s => s.id)
+      const { data: metrics } = await supabase
+        .from('session_metrics')
+        .select('session_id, peak_viewers')
+        .in('session_id', sessionIds)
+
+      const viewersBySession = new Map((metrics || []).map(m => [m.session_id, m.peak_viewers || 0]))
+
+      // Weight platform split by viewers when available, fall back to session count
+      const totals = new Map<string, number>()
+      for (const s of list) {
+        const weight = viewersBySession.get(s.id) || 1
+        totals.set(s.platform, (totals.get(s.platform) || 0) + weight)
+      }
+
+      const sumAll = Array.from(totals.values()).reduce((a, b) => a + b, 0)
+      const items: PlatformSplitItem[] = Array.from(totals.entries())
+        .map(([platform, val]) => ({
+          name: PLATFORM_LABELS_MAP[platform] || platform,
+          value: sumAll > 0 ? Math.round((val / sumAll) * 100) : 0,
+          color: PLATFORM_COLORS[platform] || '#5c6b7a',
+        }))
+        .filter(item => item.value > 0)
+        .sort((a, b) => b.value - a.value)
+
+      setData(items)
+      setLoading(false)
+    }
+
+    load()
+  }, [period])
+
+  return { data, loading, hasData: data.length > 0 }
+}
+
+// ── Weekly revenue hook — real revenue per day for the last 7 days ──
+export interface WeeklyRevenuePoint {
+  day: string
+  sessions: number
+  revenue: number
+}
+
+const DAY_LABELS = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab']
+
+export function useWeeklyRevenue() {
+  const [data, setData] = useState<WeeklyRevenuePoint[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    async function load() {
+      setLoading(true)
+      const now = new Date()
+      const from = new Date(now.getTime() - 7 * 24 * 3600 * 1000)
+
+      const { data: sessions } = await supabase
+        .from('live_sessions')
+        .select('id, scheduled_start')
+        .gte('scheduled_start', from.toISOString())
+        .lte('scheduled_start', now.toISOString())
+
+      const list = (sessions || []) as Array<{ id: string; scheduled_start: string }>
+
+      const buckets: WeeklyRevenuePoint[] = []
+      for (let i = 6; i >= 0; i--) {
+        const d = new Date(now.getTime() - i * 24 * 3600 * 1000)
+        buckets.push({ day: DAY_LABELS[d.getDay()], sessions: 0, revenue: 0 })
+      }
+
+      if (list.length === 0) {
+        setData(buckets)
+        setLoading(false)
+        return
+      }
+
+      const sessionIds = list.map(s => s.id)
+      const { data: metrics } = await supabase
+        .from('session_metrics')
+        .select('session_id, total_revenue')
+        .in('session_id', sessionIds)
+
+      const revenueBySession = new Map((metrics || []).map(m => [m.session_id, m.total_revenue || 0]))
+
+      for (const s of list) {
+        const sDate = new Date(s.scheduled_start)
+        const dayIndex = Math.floor((now.getTime() - sDate.getTime()) / (24 * 3600 * 1000))
+        const bucketIndex = 6 - dayIndex
+        if (bucketIndex >= 0 && bucketIndex < 7) {
+          buckets[bucketIndex].sessions += 1
+          buckets[bucketIndex].revenue += revenueBySession.get(s.id) || 0
+        }
+      }
+
+      setData(buckets)
+      setLoading(false)
+    }
+
+    load()
+  }, [])
+
+  return { data, loading, hasData: data.some(d => d.sessions > 0) }
+}
+
+// ── Live metrics for a specific studio's currently-live session ──
+export function useStudioLiveMetrics(sessionId: string | null) {
+  const [metrics, setMetrics] = useState<SessionMetrics | null>(null)
+
+  useEffect(() => {
+    if (!sessionId) { setMetrics(null); return }
+
+    let active = true
+    supabase
+      .from('session_metrics')
+      .select('*')
+      .eq('session_id', sessionId)
+      .order('recorded_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+      .then(({ data }) => { if (active) setMetrics(data as SessionMetrics | null) })
+
+    const channel = supabase
+      .channel(`studio-live-metrics:${sessionId}`)
+      .on('postgres_changes',
+        { event: '*', schema: 'public', table: 'session_metrics', filter: `session_id=eq.${sessionId}` },
+        (payload) => setMetrics(payload.new as SessionMetrics)
+      )
+      .subscribe()
+
+    return () => { active = false; supabase.removeChannel(channel) }
+  }, [sessionId])
+
+  return metrics
 }
 
 // ── Media assets hook ──
