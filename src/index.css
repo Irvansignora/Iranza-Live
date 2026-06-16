@@ -3,7 +3,9 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  /* ── DARK THEME (default) ── */
+  :root,
+  [data-theme='dark'] {
     --bg: #080b10;
     --surface: #0e1318;
     --surface2: #131920;
@@ -14,6 +16,32 @@
     --gold: #ffc93c;
     --muted: #5c6b7a;
     --text: #e8edf2;
+
+    --bg-glow-1: rgba(0, 229, 255, 0.03);
+    --bg-glow-2: rgba(255, 61, 107, 0.03);
+    --scrollbar-thumb: rgba(255, 255, 255, 0.1);
+    --scrollbar-thumb-hover: rgba(255, 255, 255, 0.2);
+    --color-scheme: dark;
+  }
+
+  /* ── LIGHT THEME ── */
+  [data-theme='light'] {
+    --bg: #f5f6f8;
+    --surface: #ffffff;
+    --surface2: #eef0f3;
+    --border: rgba(10, 15, 20, 0.09);
+    --accent: #0091a8;
+    --accent2: #d6004f;
+    --accent3: #2f9e44;
+    --gold: #b8860b;
+    --muted: #6b7785;
+    --text: #11161c;
+
+    --bg-glow-1: rgba(0, 145, 168, 0.05);
+    --bg-glow-2: rgba(214, 0, 79, 0.04);
+    --scrollbar-thumb: rgba(10, 15, 20, 0.12);
+    --scrollbar-thumb-hover: rgba(10, 15, 20, 0.22);
+    --color-scheme: light;
   }
 
   * {
@@ -31,8 +59,9 @@
   body {
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background-image: radial-gradient(circle at 15% 40%, rgba(0, 229, 255, 0.03) 0%, transparent 50%),
-      radial-gradient(circle at 85% 15%, rgba(255, 61, 107, 0.03) 0%, transparent 40%);
+    background-image: radial-gradient(circle at 15% 40%, var(--bg-glow-1) 0%, transparent 50%),
+      radial-gradient(circle at 85% 15%, var(--bg-glow-2) 0%, transparent 40%);
+    transition: background-color 0.25s ease, color 0.25s ease;
   }
 
   /* Scrollbar */
@@ -46,12 +75,12 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--scrollbar-thumb);
     border-radius: 2px;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--scrollbar-thumb-hover);
   }
 
   /* Focus */
@@ -64,13 +93,13 @@
   input[type='datetime-local'],
   input[type='date'],
   input[type='time'] {
-    color-scheme: dark;
+    color-scheme: var(--color-scheme);
   }
 
   /* Select */
   select option {
-    background: #0e1318;
-    color: #e8edf2;
+    background: var(--surface2);
+    color: var(--text);
   }
 }
 
