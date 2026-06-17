@@ -307,9 +307,8 @@ function PhotosTab({
         <div>
           <div className="font-body font-semibold text-text text-sm">Foto tersimpan di Cloudinary — zero storage lokal</div>
           <div className="text-muted text-xs font-body mt-1">
-            Upload foto studio/behind-the-scenes di sini. Foto akan tampil di:
-            (1) <strong className="text-text">strip scrolling</strong> bawah hero section,
-            (2) <strong className="text-text">Work gallery</strong> section — max 6 foto ditampilkan pertama.
+            Upload foto studio/behind-the-scenes di sini. Foto akan tampil di{' '}
+            <strong className="text-text">section #Work</strong> di landing page — max 6 foto ditampilkan di gallery, sisanya tercatat sebagai "+N foto lainnya".
           </div>
         </div>
       </div>
@@ -425,7 +424,7 @@ function PhotosTab({
           </div>
 
           <p className="text-xs text-muted font-body mt-3">
-            💡 6 foto pertama ditampilkan di Work gallery. Semua foto tampil di strip scrolling hero. Gunakan ← → untuk atur urutan.
+            💡 6 foto pertama ditampilkan di Work gallery. Gunakan ← → untuk atur urutan tampil.
           </p>
         </div>
       )}
