@@ -553,11 +553,168 @@ function ProsesScrollStory({ sectionNum }: { sectionNum: string }) {
   )
 }
 
+/* ─── Services — pinned GSAP scroll-story ──────────────── */
+function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const pinRef = useRef<HTMLDivElement>(null)
+  const stepRefs = useRef<(HTMLDivElement | null)[]>([])
+  const numRefs = useRef<(HTMLDivElement | null)[]>([])
+  const progressRef = useRef<HTMLDivElement>(null)
+  const dotRefs = useRef<(HTMLDivElement | null)[]>([])
+  const [isDesktopStory, setIsDesktopStory] = useState(true)
+
+  useEffect(() => {
+    setIsDesktopStory(window.matchMedia('(min-width:769px)').matches)
+  }, [])
+
+  useEffect(() => {
+    if (!isDesktopStory) return
+    if (!wrapRef.current || !pinRef.current) return
+
+    const steps = stepRefs.current.filter(Boolean) as HTMLDivElement[]
+    const nums = numRefs.current.filter(Boolean) as HTMLDivElement[]
+    const dots = dotRefs.current.filter(Boolean) as HTMLDivElement[]
+    if (steps.length === 0) return
+
+    steps.forEach((el, i) => {
+      gsap.set(el, { opacity: i === 0 ? 1 : 0, x: i === 0 ? 0 : 60 })
+    })
+    nums.forEach((el, i) => {
+      gsap.set(el, { opacity: i === 0 ? 1 : 0, scale: i === 0 ? 1 : 0.85 })
+    })
+    dots.forEach((el, i) => {
+      gsap.set(el, { background: i === 0 ? SERVICES[0].color : 'var(--border)', scale: i === 0 ? 1.3 : 1 })
+    })
+
+    const tl = gsap.timeline({
+      scrollTrigger: {
+        trigger: wrapRef.current,
+        start: 'top top',
+        end: `+=${steps.length * 100}%`,
+        scrub: 0.4,
+        pin: pinRef.current,
+        pinSpacing: true,
+        onUpdate: (self) => {
+          if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
+        },
+      },
+    })
+
+    steps.forEach((el, i) => {
+      if (i === 0) return
+      const prev = steps[i - 1]
+      const prevNum = nums[i - 1]
+      const curNum = nums[i]
+      tl.to(prev, { opacity: 0, x: -60, duration: 0.35, ease: 'power2.in' }, '<')
+        .to(prevNum, { opacity: 0, scale: 0.85, duration: 0.3, ease: 'power2.in' }, '<')
+        .to(dots[i - 1], { background: 'var(--border)', scale: 1, duration: 0.25 }, '<')
+        .fromTo(el, { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' })
+        .fromTo(curNum, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.7)' }, '<')
+        .to(dots[i], { background: SERVICES[i].color, scale: 1.3, duration: 0.25 }, '<')
+    })
+
+    return () => { tl.scrollTrigger?.kill(); tl.kill() }
+  }, [isDesktopStory])
+
+  if (!isDesktopStory) {
+    // Mobile fallback: simple stacked cards, no pin
+    return (
+      <div style={{ display: 'grid', gap: 12 }}>
+        {SERVICES.map((sv) => (
+          <div key={sv.id} style={{ background: '#0D0D0D', border: '1px solid var(--border)', borderRadius: 8, padding: '28px 24px', borderLeft: `2px solid ${sv.color}` }}>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: sv.color, letterSpacing: '.1em', marginBottom: 10 }}>{sv.num}</div>
+            <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 22, fontWeight: 900, color: '#F2EFE8', marginBottom: 6 }}>{sv.name}</div>
+            <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, color: sv.color, marginBottom: 14, opacity: 0.9 }}>{sv.tagline}</div>
+            <p style={{ fontSize: 14, lineHeight: 1.8, color: 'var(--muted)', marginBottom: 16 }}>{sv.desc}</p>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {sv.tags.map(t => (
+                <span key={t} style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', textTransform: 'uppercase', border: `1px solid ${sv.color}30`, padding: '5px 12px', borderRadius: 100, color: sv.color }}>{t}</span>
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    )
+  }
+
+  return (
+    <div ref={wrapRef} style={{ position: 'relative' }}>
+      <div ref={pinRef} style={{ minHeight: '70vh', display: 'flex', alignItems: 'center' }}>
+        <div style={{ width: '100%' }}>
+          <div style={{ position: 'relative', height: 380 }}>
+            {/* Giant background number for the active service */}
+            <div style={{ position: 'absolute', top: -40, left: -10, height: 460, width: 280, overflow: 'hidden', pointerEvents: 'none' }}>
+              {SERVICES.map((sv, i) => (
+                <div
+                  key={sv.id}
+                  ref={el => { numRefs.current[i] = el }}
+                  style={{
+                    position: 'absolute', inset: 0,
+                    fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
+                    fontSize: 280, lineHeight: 1, color: `${sv.color}14`,
+                    display: 'flex', alignItems: 'center',
+                  }}
+                >{sv.num}</div>
+              ))}
+            </div>
+
+            {SERVICES.map((sv, i) => (
+              <div
+                key={sv.id}
+                ref={el => { stepRefs.current[i] = el }}
+                style={{
+                  position: 'absolute', inset: 0,
+                  display: 'grid', gridTemplateColumns: '280px 1fr', gap: 8, alignItems: 'center',
+                }}
+              >
+                <div />
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 14, marginBottom: 8 }}>
+                    <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, color: sv.color, letterSpacing: '.1em' }}>{sectionNum}.{sv.num}</span>
+                    <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(28px,3.5vw,46px)', fontWeight: 900, color: '#F2EFE8', letterSpacing: '-0.02em' }}>{sv.name}</div>
+                  </div>
+                  <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 13, letterSpacing: '.06em', color: sv.color, marginBottom: 20, opacity: 0.9 }}>{sv.tagline}</div>
+                  <p style={{ fontSize: 16, lineHeight: 1.85, color: 'var(--muted)', maxWidth: 540, marginBottom: 20 }}>{sv.desc}</p>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                    {sv.tags.map(t => (
+                      <span key={t} style={{
+                        fontFamily: "'Space Mono', monospace", fontSize: 11,
+                        letterSpacing: '.1em', textTransform: 'uppercase',
+                        border: `1px solid ${sv.color}30`, padding: '6px 14px',
+                        borderRadius: 100, color: sv.color,
+                      }}>{t}</span>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Progress bar + step dots */}
+          <div style={{ marginTop: 32, display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div style={{ flex: 1, height: 2, background: 'var(--border)', borderRadius: 2, overflow: 'hidden' }}>
+              <div ref={progressRef} style={{ height: '100%', width: '0%', background: '#FF4D00', borderRadius: 2 }} />
+            </div>
+            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+              {SERVICES.map((sv, i) => (
+                <div
+                  key={sv.id}
+                  ref={el => { dotRefs.current[i] = el }}
+                  style={{ width: 8, height: 8, borderRadius: '50%', background: i === 0 ? sv.color : 'var(--border)' }}
+                />
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── Main Component ─────────────────────────────────── */
 export default function LandingPage() {
   const [s, setS] = useState<LandingSettings>(DEFAULT)
   const [scrolled, setScrolled] = useState(false)
-  const [activeService, setActiveService] = useState<string | null>(null)
   const visible = useReveal()
   const servicesParallax = useGsapParallax(0.18)
   const workParallax = useGsapParallax(0.22)
@@ -722,43 +879,6 @@ export default function LandingPage() {
           color: var(--muted); white-space: nowrap; flex-shrink: 0;
         }
 
-        .il-svc-row {
-          border-bottom: 1px solid var(--border);
-          position: relative; overflow: hidden;
-          transition: background .4s;
-        }
-        .il-svc-row:hover { background: rgba(255,77,0,0.025); }
-        .il-svc-row:hover .il-svc-num { color: var(--orange); }
-        .il-svc-row:hover .il-svc-arrow { border-color: var(--orange); background: var(--orange); transform: rotate(45deg); }
-        .il-svc-row:hover .il-svc-body { max-height: 220px; padding-bottom: 40px; }
-        .il-svc-row:hover .il-svc-head { padding: 36px 0; }
-
-        .il-svc-head {
-          display: grid; grid-template-columns: 68px 1fr auto;
-          align-items: center; gap: 24px;
-          padding: 30px 0; position: relative; z-index: 1;
-          transition: padding .35s cubic-bezier(.23,1,.32,1);
-        }
-        .il-svc-body {
-          display: grid; grid-template-columns: 68px 1fr;
-          gap: 24px; max-height: 0; overflow: hidden;
-          position: relative; z-index: 1;
-          transition: max-height .55s cubic-bezier(.23,1,.32,1), padding .35s;
-        }
-        .il-svc-num {
-          font-family: 'Space Mono', monospace;
-          font-size: 11px; letter-spacing: .16em;
-          color: var(--muted);
-          transition: color .3s;
-        }
-        .il-svc-arrow {
-          width: 46px; height: 46px;
-          border: 1px solid var(--border); border-radius: 50%;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 18px; color: var(--paper);
-          transition: transform .4s cubic-bezier(.23,1,.32,1), border-color .3s, background .3s;
-        }
-
         .il-stat { transition: background .3s; }
         .il-stat:hover { background: rgba(255,77,0,0.03); }
 
@@ -816,8 +936,6 @@ export default function LandingPage() {
           .il-hero-h1 { font-size: clamp(52px,15vw,120px) !important; }
           .il-nav-links .il-nav-link { display: none !important; }
           .il-hero-bottom { grid-template-columns: 1fr !important; gap: 24px !important; }
-          .il-svc-head { grid-template-columns: 40px 1fr auto !important; }
-          .il-svc-body { grid-template-columns: 40px 1fr !important; }
           .il-stats-grid { grid-template-columns: 1fr !important; }
           .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
           .il-price-row { grid-template-columns: 44px 1fr auto !important; }
@@ -863,8 +981,8 @@ export default function LandingPage() {
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
         padding: scrolled ? '14px 48px' : '24px 48px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: scrolled ? 'rgba(10,10,10,0.9)' : 'transparent',
-        backdropFilter: scrolled ? 'blur(20px)' : 'none',
+        background: scrolled ? 'rgba(10,10,10,0.9)' : 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.3) 60%, transparent 100%)',
+        backdropFilter: scrolled ? 'blur(20px)' : 'blur(2px)',
         borderBottom: scrolled ? '1px solid var(--border)' : 'none',
         transition: 'padding .4s, background .4s, border-bottom .4s',
       }}>
@@ -888,7 +1006,8 @@ export default function LandingPage() {
       <section style={{
         minHeight: '100vh',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        padding: hasPhotos ? '0 48px 240px' : '0 48px 80px',
+        padding: hasPhotos ? '0 48px 200px' : '0 48px 80px',
+        paddingTop: 'max(140px, 14vh)',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -995,53 +1114,9 @@ export default function LandingPage() {
             </div>
           </div>
 
-          {/* Service rows */}
-          <div style={{ borderTop: '1px solid var(--border)' }}>
-            {SERVICES.map((sv, i) => (
-              <div
-                key={sv.id}
-                className="il-svc-row"
-                data-rid={`svc-${i}`}
-                data-rdelay={`${i * 80}`}
-                style={{ ...rv(`svc-${i}`, i * 80) }}
-                onMouseEnter={() => { setActiveService(sv.id); setCursorType('hover') }}
-                onMouseLeave={() => { setActiveService(null); setCursorType('default') }}
-              >
-                {/* Colored accent line */}
-                <div style={{
-                  position: 'absolute', left: 0, top: 0, bottom: 0, width: 2,
-                  background: sv.color,
-                  opacity: activeService === sv.id ? 1 : 0,
-                  transition: 'opacity .3s',
-                }} />
-
-                <div className="il-svc-head">
-                  <span className="il-svc-num">{sv.num}</span>
-                  <div>
-                    <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(22px,2.8vw,38px)', fontWeight: 900, letterSpacing: '-0.02em', color: '#F2EFE8' }}>{sv.name}</div>
-                    <div style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.08em', color: sv.color, marginTop: 4, opacity: 0.9 }}>{sv.tagline}</div>
-                  </div>
-                  <div className="il-svc-arrow">→</div>
-                </div>
-
-                <div className="il-svc-body">
-                  <div />
-                  <div>
-                    <p style={{ fontSize: 15, lineHeight: 1.85, color: 'var(--muted)' }}>{sv.desc}</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 18 }}>
-                      {sv.tags.map(t => (
-                        <span key={t} style={{
-                          fontFamily: "'Space Mono', monospace", fontSize: 10,
-                          letterSpacing: '.1em', textTransform: 'uppercase',
-                          border: `1px solid ${sv.color}30`, padding: '5px 12px',
-                          borderRadius: 100, color: sv.color,
-                        }}>{t}</span>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
+          {/* Service rows — pinned GSAP scroll-story */}
+          <div data-rid="svc-grid" style={rv('svc-grid', 100)}>
+            <ServicesScrollStory sectionNum="01" />
           </div>
         </div>
       </section>
