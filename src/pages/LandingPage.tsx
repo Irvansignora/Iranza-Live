@@ -458,35 +458,36 @@ function ProsesScrollStory({ sectionNum }: { sectionNum: string }) {
     const steps = stepRefs.current.filter(Boolean) as HTMLDivElement[]
     if (steps.length === 0) return
 
-    // Start every step hidden except the first
-    steps.forEach((el, i) => {
-      gsap.set(el, { opacity: i === 0 ? 1 : 0, y: i === 0 ? 0 : 40, scale: i === 0 ? 1 : 0.96 })
-    })
+    const n = steps.length
+    let activeIndex = 0
 
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: wrapRef.current,
-        start: 'top top',
-        end: `+=${steps.length * 100}%`,
-        scrub: 0.4,
-        pin: pinRef.current,
-        pinSpacing: true,
-        onUpdate: (self) => {
-          if (progressRef.current) {
-            progressRef.current.style.width = `${self.progress * 100}%`
-          }
-        },
+    // Start every step hidden except the first
+    steps.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, y: i === 0 ? 0 : 40, scale: i === 0 ? 1 : 0.96 }))
+
+    function goToStep(index: number) {
+      if (index === activeIndex) return
+      const prevIndex = activeIndex
+      activeIndex = index
+
+      gsap.to(steps[prevIndex], { opacity: 0, y: -30, scale: 0.96, duration: 0.3, ease: 'power2.in', overwrite: true })
+      gsap.fromTo(steps[index], { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out', overwrite: true })
+    }
+
+    const trigger = ScrollTrigger.create({
+      trigger: wrapRef.current,
+      start: 'top top',
+      end: `+=${n * 100}%`,
+      scrub: 0.3,
+      pin: pinRef.current,
+      pinSpacing: true,
+      onUpdate: (self) => {
+        if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
+        const stepIndex = Math.min(n - 1, Math.floor(self.progress * n))
+        goToStep(stepIndex)
       },
     })
 
-    steps.forEach((el, i) => {
-      if (i === 0) return
-      const prev = steps[i - 1]
-      tl.to(prev, { opacity: 0, y: -30, scale: 0.96, duration: 0.35, ease: 'power2.in' })
-        .fromTo(el, { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.4, ease: 'power2.out' })
-    })
-
-    return () => { tl.scrollTrigger?.kill(); tl.kill() }
+    return () => trigger.kill()
   }, [isDesktopStory])
 
   if (!isDesktopStory) {
@@ -576,44 +577,46 @@ function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
     const dots = dotRefs.current.filter(Boolean) as HTMLDivElement[]
     if (steps.length === 0) return
 
-    steps.forEach((el, i) => {
-      gsap.set(el, { opacity: i === 0 ? 1 : 0, x: i === 0 ? 0 : 60 })
-    })
-    nums.forEach((el, i) => {
-      gsap.set(el, { opacity: i === 0 ? 1 : 0, scale: i === 0 ? 1 : 0.85 })
-    })
-    dots.forEach((el, i) => {
-      gsap.set(el, { background: i === 0 ? SERVICES[0].color : 'var(--border)', scale: i === 0 ? 1.3 : 1 })
-    })
+    const n = steps.length
+    let activeIndex = 0
 
-    const tl = gsap.timeline({
-      scrollTrigger: {
-        trigger: wrapRef.current,
-        start: 'top top',
-        end: `+=${steps.length * 100}%`,
-        scrub: 0.4,
-        pin: pinRef.current,
-        pinSpacing: true,
-        onUpdate: (self) => {
-          if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
-        },
+    // Initial state: only step 0 visible
+    steps.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, x: i === 0 ? 0 : 60 }))
+    nums.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, scale: i === 0 ? 1 : 0.85 }))
+    dots.forEach((el, i) => gsap.set(el, { background: i === 0 ? SERVICES[0].color : 'var(--border)', scale: i === 0 ? 1.3 : 1 }))
+
+    function goToStep(index: number) {
+      if (index === activeIndex) return
+      const prevIndex = activeIndex
+      activeIndex = index
+
+      gsap.to(steps[prevIndex], { opacity: 0, x: index > prevIndex ? -60 : 60, duration: 0.3, ease: 'power2.in', overwrite: true })
+      gsap.to(nums[prevIndex], { opacity: 0, scale: 0.85, duration: 0.3, ease: 'power2.in', overwrite: true })
+      gsap.to(dots[prevIndex], { background: 'var(--border)', scale: 1, duration: 0.25, overwrite: true })
+
+      gsap.fromTo(steps[index], { opacity: 0, x: index > prevIndex ? 60 : -60 }, { opacity: 1, x: 0, duration: 0.35, ease: 'power2.out', overwrite: true })
+      gsap.fromTo(nums[index], { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.7)', overwrite: true })
+      gsap.to(dots[index], { background: SERVICES[index].color, scale: 1.3, duration: 0.25, overwrite: true })
+    }
+
+    // Each step gets an equal slice of the scroll progress (0..1). A small
+    // dead-zone is reserved at the very start/end of each slice so the
+    // active card has time to fully settle before the next switch fires.
+    const trigger = ScrollTrigger.create({
+      trigger: wrapRef.current,
+      start: 'top top',
+      end: `+=${n * 100}%`,
+      scrub: 0.3,
+      pin: pinRef.current,
+      pinSpacing: true,
+      onUpdate: (self) => {
+        if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
+        const stepIndex = Math.min(n - 1, Math.floor(self.progress * n))
+        goToStep(stepIndex)
       },
     })
 
-    steps.forEach((el, i) => {
-      if (i === 0) return
-      const prev = steps[i - 1]
-      const prevNum = nums[i - 1]
-      const curNum = nums[i]
-      tl.to(prev, { opacity: 0, x: -60, duration: 0.35, ease: 'power2.in' }, '<')
-        .to(prevNum, { opacity: 0, scale: 0.85, duration: 0.3, ease: 'power2.in' }, '<')
-        .to(dots[i - 1], { background: 'var(--border)', scale: 1, duration: 0.25 }, '<')
-        .fromTo(el, { opacity: 0, x: 60 }, { opacity: 1, x: 0, duration: 0.4, ease: 'power2.out' })
-        .fromTo(curNum, { opacity: 0, scale: 0.85 }, { opacity: 1, scale: 1, duration: 0.4, ease: 'back.out(1.7)' }, '<')
-        .to(dots[i], { background: SERVICES[i].color, scale: 1.3, duration: 0.25 }, '<')
-    })
-
-    return () => { tl.scrollTrigger?.kill(); tl.kill() }
+    return () => trigger.kill()
   }, [isDesktopStory])
 
   if (!isDesktopStory) {
@@ -1007,7 +1010,7 @@ export default function LandingPage() {
         minHeight: '100vh',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
         padding: hasPhotos ? '0 48px 200px' : '0 48px 80px',
-        paddingTop: 'max(140px, 14vh)',
+        paddingTop: 'max(220px, 24vh)',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
