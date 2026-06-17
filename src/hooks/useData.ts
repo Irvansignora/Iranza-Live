@@ -11,11 +11,18 @@ export function useClients() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const { data } = await supabase
+    // NOTE: previously this used a nested select (`profile:profiles(...)`)
+    // to also pull the linked auth profile. That field was unused in the
+    // UI, and PostgREST's nested-select join silently excluded any client
+    // whose profile_id is NULL (i.e. every client not yet linked to a
+    // user account) — which is the normal case right after creating a
+    // client via the admin form. Plain '*' avoids that join entirely.
+    const { data, error } = await supabase
       .from('clients')
-      .select('*, profile:profiles(id, full_name, email, avatar_url)')
+      .select('*')
       .eq('is_active', true)
       .order('name')
+    if (error) console.error('useClients fetch error:', error.message)
     setClients((data as Client[]) || [])
     setLoading(false)
   }, [])
