@@ -1003,14 +1003,20 @@ export default function LandingPage() {
         </div>
       </nav>
 
+      {/* Explicit spacer reserving room for the fixed navbar above — this
+          is a real block-level element in normal document flow, so it
+          reliably pushes the hero section down regardless of viewport
+          height, flexbox alignment, or Three.js canvas behavior inside
+          the hero. More robust than relying on padding/vh tricks alone. */}
+      <div style={{ height: 110 }} />
+
       {/* ══════════════════════════════════════════════
           HERO
       ══════════════════════════════════════════════ */}
       <section style={{
-        minHeight: '100vh',
+        minHeight: 'calc(100vh - 110px)',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        padding: hasPhotos ? '0 48px 200px' : '0 48px 80px',
-        paddingTop: 'max(220px, 24vh)',
+        padding: hasPhotos ? '40px 48px 200px' : '40px 48px 80px',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -1570,7 +1576,7 @@ export default function LandingPage() {
 
         <div className="il-footer-bottom" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 0', flexWrap: 'wrap', gap: 16 }}>
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-            © 2026 Iranza Live. Creative Agency. All rights reserved.
+            © 2025 Iranza Live. Creative Agency. All rights reserved.
           </span>
           <a href={wa('Halo Iranza Live')} target="_blank" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: '#25D366', display: 'flex', alignItems: 'center', gap: 8 }}>
             💚 {phone}
