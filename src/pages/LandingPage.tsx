@@ -374,20 +374,26 @@ function ThreeCanvas() {
 }
 
 /* ─── Floating Photo Strip ────────────────────────────── */
-function PhotoStrip({ photos }: { photos: HeroPhoto[] }) {
+function PhotoStrip({ photos, inline = false }: { photos: HeroPhoto[], inline?: boolean }) {
   if (!photos.length) return null
 
   const items = [...photos, ...photos, ...photos] // triple for seamless loop
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 200,
+      ...(inline ? {
+        position: 'relative',
+        width: '100%',
+        height: 220,
+      } : {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 200,
+        zIndex: 2,
+      }),
       overflow: 'hidden',
-      zIndex: 2,
       maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
       WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
     }}>
@@ -1193,44 +1199,17 @@ export default function LandingPage() {
           </div>
 
           {hasPhotos ? (
-            <>
-              {/* Masonry-style photo grid */}
-              <div
-                className="il-photo-grid"
-                data-rid="work-photos"
-                style={{
-                  ...rv('work-photos', 100),
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 16,
-                }}
-              >
-                {s.hero_photos.slice(0, 6).map((photo, i) => (
-                  <div
-                    key={i}
-                    className="il-photo-card"
-                    style={{
-                      height: i === 0 || i === 5 ? 400 : 280,
-                      gridRow: i === 0 ? 'span 2' : 'span 1',
-                    }}
-                    {...addCursorTarget('hover')}
-                  >
-                    <img
-                      src={getCloudinaryThumbnail(photo.cloudinary_url, 800, 800)}
-                      alt={photo.caption || `Studio foto ${i + 1}`}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {s.hero_photos.length > 6 && (
-                <div style={{ textAlign: 'center', marginTop: 32 }}>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                    +{s.hero_photos.length - 6} foto lainnya
-                  </span>
-                </div>
-              )}
-            </>
+            <div
+              data-rid="work-photos"
+              style={{
+                ...rv('work-photos', 100),
+                marginLeft: 'calc(-1 * ((100vw - 1240px) / 2))',
+                marginRight: 'calc(-1 * ((100vw - 1240px) / 2))',
+                overflow: 'hidden',
+              }}
+            >
+              <PhotoStrip photos={s.hero_photos} inline />
+            </div>
           ) : (
             /* Honest fallback — no fake photos, just what we can verify in text */
             <div
