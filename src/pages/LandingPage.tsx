@@ -121,18 +121,38 @@ function useGsapParallax(speed = 0.15) {
 function useReveal() {
   const [visible, setVisible] = useState<Set<string>>(new Set())
   useEffect(() => {
-    const obs = new IntersectionObserver(entries => {
+    const observed = new Set<Element>()
+
+    const io = new IntersectionObserver(entries => {
       entries.forEach(e => {
         if (e.isIntersecting && e.target instanceof HTMLElement) {
           const id = e.target.dataset.rid!
           const delay = parseFloat(e.target.dataset.rdelay || '0')
           setTimeout(() => setVisible(p => new Set([...p, id])), delay)
-          obs.unobserve(e.target)
+          io.unobserve(e.target)
+          observed.delete(e.target)
         }
       })
     }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' })
-    document.querySelectorAll('[data-rid]').forEach(el => obs.observe(el))
-    return () => obs.disconnect()
+
+    const observeNew = () => {
+      document.querySelectorAll('[data-rid]').forEach(el => {
+        if (!observed.has(el)) {
+          observed.add(el)
+          io.observe(el)
+        }
+      })
+    }
+
+    // Initial scan
+    observeNew()
+
+    // Re-scan whenever DOM changes (e.g. after Supabase data loads and
+    // conditionally-rendered elements like work-photos appear in the DOM)
+    const mo = new MutationObserver(observeNew)
+    mo.observe(document.body, { childList: true, subtree: true })
+
+    return () => { io.disconnect(); mo.disconnect() }
   }, [])
   return visible
 }
