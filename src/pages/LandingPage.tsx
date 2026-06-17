@@ -1016,7 +1016,7 @@ export default function LandingPage() {
       <section style={{
         minHeight: 'calc(100vh - 110px)',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        padding: hasPhotos ? '40px 48px 200px' : '40px 48px 80px',
+        padding: '40px 48px 80px',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -1080,8 +1080,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scrolling photo strip */}
-        {hasPhotos && <PhotoStrip photos={s.hero_photos} />}
+        {/* Photo strip dihapus — foto tampil di section #Work */}
       </section>
 
       {/* ── MARQUEE 1 ── */}
