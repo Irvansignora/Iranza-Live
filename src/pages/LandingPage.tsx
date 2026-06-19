@@ -421,6 +421,330 @@ function ThreeCanvas() {
   )
 }
 
+/* ─── Floating 3D Shape — lightweight decorative background ───
+   Reuses the same three.js r128 CDN instance as the hero canvas.
+   Desktop-only (decorative, skipped on mobile for perf) and only
+   initializes once its section actually scrolls into view. */
+function FloatingShape3D({ shape = 'icosahedron', color = 0xFF4D00, size = 1.4 }: {
+  shape?: 'icosahedron' | 'torus' | 'octahedron'; color?: number; size?: number
+}) {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    if (!window.matchMedia('(min-width:769px)').matches) return
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const supportsWebGL = (() => {
+      try {
+        const test = document.createElement('canvas')
+        return !!(test.getContext('webgl') || test.getContext('experimental-webgl'))
+      } catch {
+        return false
+      }
+    })()
+    if (!supportsWebGL) return
+
+    // Only spin up the GPU work once the section is actually visible.
+    const io = new IntersectionObserver(entries => {
+      if (!entries[0]?.isIntersecting) return
+      io.disconnect()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if ((window as any).THREE) {
+        initShape(canvas)
+        return
+      }
+      const script = document.createElement('script')
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
+      script.onload = () => initShape(canvas)
+      script.onerror = () => console.warn('[FloatingShape3D] Failed to load three.js from CDN.')
+      document.head.appendChild(script)
+    }, { threshold: 0.1 })
+    io.observe(canvas)
+
+    return () => io.disconnect()
+  }, [])
+
+  function initShape(canvas: HTMLCanvasElement) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const THREE = (window as any).THREE
+      if (!THREE) return
+
+      const W = canvas.offsetWidth
+      const H = canvas.offsetHeight
+      if (!W || !H) {
+        requestAnimationFrame(() => initShape(canvas))
+        return
+      }
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+      renderer.setSize(W, H)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setClearColor(0x000000, 0)
+
+      const scene = new THREE.Scene()
+      const camera = new THREE.PerspectiveCamera(45, W / H, 0.1, 100)
+      camera.position.set(0, 0, 5)
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.4))
+      const light = new THREE.PointLight(color, 2.2, 20)
+      light.position.set(2, 2, 3)
+      scene.add(light)
+
+      const geo = shape === 'torus'
+        ? new THREE.TorusGeometry(size * 0.6, size * 0.22, 24, 80)
+        : shape === 'octahedron'
+        ? new THREE.OctahedronGeometry(size * 0.7, 0)
+        : new THREE.IcosahedronGeometry(size * 0.7, 0)
+
+      const mesh = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({
+        color, metalness: 0.7, roughness: 0.25, emissive: color, emissiveIntensity: 0.12,
+      }))
+      scene.add(mesh)
+
+      const wireMesh = new THREE.Mesh(geo.clone(), new THREE.MeshBasicMaterial({
+        color, wireframe: true, transparent: true, opacity: 0.12,
+      }))
+      wireMesh.scale.setScalar(1.35)
+      scene.add(wireMesh)
+
+      let mouseX = 0, mouseY = 0
+      const onMouseMove = (e: MouseEvent) => {
+        mouseX = (e.clientX / window.innerWidth - 0.5) * 2
+        mouseY = -(e.clientY / window.innerHeight - 0.5) * 2
+      }
+      window.addEventListener('mousemove', onMouseMove)
+
+      let animId: number
+      const clock = new THREE.Clock()
+      const animate = () => {
+        animId = requestAnimationFrame(animate)
+        const t = clock.getElapsedTime()
+        mesh.rotation.x = t * 0.18
+        mesh.rotation.y = t * 0.26
+        wireMesh.rotation.x = -t * 0.1
+        wireMesh.rotation.y = t * 0.14
+        camera.position.x += (mouseX * 0.4 - camera.position.x) * 0.04
+        camera.position.y += (mouseY * 0.25 - camera.position.y) * 0.04
+        camera.lookAt(0, 0, 0)
+        renderer.render(scene, camera)
+      }
+      animate()
+
+      const onResize = () => {
+        const W2 = canvas.offsetWidth
+        const H2 = canvas.offsetHeight
+        if (!W2 || !H2) return
+        camera.aspect = W2 / H2
+        camera.updateProjectionMatrix()
+        renderer.setSize(W2, H2)
+      }
+      window.addEventListener('resize', onResize)
+
+      ;(canvas as HTMLCanvasElement & { _shapeCleanup?: () => void })._shapeCleanup = () => {
+        cancelAnimationFrame(animId)
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('resize', onResize)
+        renderer.dispose()
+      }
+    } catch (err) {
+      console.warn('[FloatingShape3D] Failed to initialize 3D scene.', err)
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      const canvas = canvasRef.current as HTMLCanvasElement & { _shapeCleanup?: () => void }
+      canvas?._shapeCleanup?.()
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}
+    />
+  )
+}
+
+/* ─── Distorted Image — WebGL ripple/chromatic-aberration on hover ───
+   Renders a single full-bleed image plane with a custom shader. On
+   mouse move, the point under the cursor "ripples" the UVs and splits
+   RGB channels slightly — classic liquid-distortion hover effect.
+   Falls back to a plain <img> on mobile / no-WebGL (no hover there anyway). */
+function DistortedImage({ src, alt = '', className, style }: {
+  src: string; alt?: string; className?: string; style?: React.CSSProperties
+}) {
+  const wrapRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const [webglReady, setWebglReady] = useState(false)
+
+  useEffect(() => {
+    if (!window.matchMedia('(min-width:769px)').matches) return // desktop only — effect needs hover
+    const canvas = canvasRef.current
+    const wrap = wrapRef.current
+    if (!canvas || !wrap) return
+
+    const supportsWebGL = (() => {
+      try {
+        const test = document.createElement('canvas')
+        return !!(test.getContext('webgl') || test.getContext('experimental-webgl'))
+      } catch {
+        return false
+      }
+    })()
+    if (!supportsWebGL) return
+
+    const start = () => initDistort(canvas, wrap, src)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).THREE) {
+      start()
+    } else {
+      const script = document.createElement('script')
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
+      script.onload = start
+      script.onerror = () => console.warn('[DistortedImage] Failed to load three.js from CDN.')
+      document.head.appendChild(script)
+    }
+
+    return () => {
+      const c = canvasRef.current as HTMLCanvasElement & { _distortCleanup?: () => void }
+      c?._distortCleanup?.()
+    }
+  }, [src])
+
+  function initDistort(canvas: HTMLCanvasElement, wrap: HTMLDivElement, imgSrc: string) {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const THREE = (window as any).THREE
+      if (!THREE) return
+
+      const W = canvas.offsetWidth
+      const H = canvas.offsetHeight
+      if (!W || !H) {
+        requestAnimationFrame(() => initDistort(canvas, wrap, imgSrc))
+        return
+      }
+
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+      renderer.setSize(W, H)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+
+      const scene = new THREE.Scene()
+      const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1)
+
+      const uniforms = {
+        uTexture: { value: null },
+        uMouse: { value: new THREE.Vector2(0.5, 0.5) },
+        uHover: { value: 0 },
+        uTime: { value: 0 },
+      }
+
+      const material = new THREE.ShaderMaterial({
+        uniforms,
+        transparent: true,
+        vertexShader: `
+          varying vec2 vUv;
+          void main() {
+            vUv = uv;
+            gl_Position = vec4(position, 1.0);
+          }
+        `,
+        fragmentShader: `
+          uniform sampler2D uTexture;
+          uniform vec2 uMouse;
+          uniform float uHover;
+          uniform float uTime;
+          varying vec2 vUv;
+          void main() {
+            vec2 m = vec2(uMouse.x, 1.0 - uMouse.y);
+            float dist = distance(vUv, m);
+            float falloff = smoothstep(0.45, 0.0, dist);
+            float ripple = sin(dist * 36.0 - uTime * 3.5) * 0.018 * uHover * falloff;
+            vec2 dir = normalize(vUv - m + 0.0001);
+            vec2 uv = vUv + dir * ripple;
+            float aberration = 0.0035 * uHover * falloff;
+            float r = texture2D(uTexture, uv + dir * aberration).r;
+            float g = texture2D(uTexture, uv).g;
+            float b = texture2D(uTexture, uv - dir * aberration).b;
+            gl_FragColor = vec4(r, g, b, 1.0);
+          }
+        `,
+      })
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(2, 2), material)
+      scene.add(mesh)
+
+      const loader = new THREE.TextureLoader()
+      loader.crossOrigin = 'anonymous'
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      loader.load(imgSrc, (tex: any) => {
+        tex.minFilter = THREE.LinearFilter
+        uniforms.uTexture.value = tex
+        canvas.style.opacity = '1'
+      })
+
+      let targetHover = 0
+      const onEnter = () => { targetHover = 1 }
+      const onLeave = () => { targetHover = 0 }
+      const onMove = (e: MouseEvent) => {
+        const rect = wrap.getBoundingClientRect()
+        uniforms.uMouse.value.set(
+          (e.clientX - rect.left) / rect.width,
+          (e.clientY - rect.top) / rect.height,
+        )
+      }
+      wrap.addEventListener('mouseenter', onEnter)
+      wrap.addEventListener('mouseleave', onLeave)
+      wrap.addEventListener('mousemove', onMove)
+
+      let animId: number
+      const clock = new THREE.Clock()
+      const animate = () => {
+        animId = requestAnimationFrame(animate)
+        uniforms.uTime.value = clock.getElapsedTime()
+        uniforms.uHover.value += (targetHover - uniforms.uHover.value) * 0.08
+        if (uniforms.uTexture.value) renderer.render(scene, camera)
+      }
+      animate()
+
+      const onResize = () => {
+        const W2 = canvas.offsetWidth
+        const H2 = canvas.offsetHeight
+        if (!W2 || !H2) return
+        renderer.setSize(W2, H2)
+      }
+      window.addEventListener('resize', onResize)
+
+      setWebglReady(true)
+
+      ;(canvas as HTMLCanvasElement & { _distortCleanup?: () => void })._distortCleanup = () => {
+        cancelAnimationFrame(animId)
+        wrap.removeEventListener('mouseenter', onEnter)
+        wrap.removeEventListener('mouseleave', onLeave)
+        wrap.removeEventListener('mousemove', onMove)
+        window.removeEventListener('resize', onResize)
+        renderer.dispose()
+      }
+    } catch (err) {
+      console.warn('[DistortedImage] Failed to initialize.', err)
+    }
+  }
+
+  return (
+    <div ref={wrapRef} className={className} style={{ position: 'relative', overflow: 'hidden', ...style }}>
+      <img src={src} alt={alt} style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute', inset: 0, width: '100%', height: '100%',
+          opacity: 0, transition: 'opacity .4s ease', display: webglReady ? 'block' : 'none',
+        }}
+      />
+    </div>
+  )
+}
+
 /* ─── Floating Photo Strip ────────────────────────────── */
 function PhotoStrip({ photos, inline = false }: { photos: HeroPhoto[], inline?: boolean }) {
   if (!photos.length) return null
@@ -956,6 +1280,7 @@ export default function LandingPage() {
       .il-nav-link:hover { color: var(--paper); }
       .il-nav-link:hover::after { transform: scaleX(1); }
       .il-pill { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; background: var(--orange); color: white; padding: 11px 26px; border-radius: 100px; transition: background .25s, transform .2s, box-shadow .4s; display: inline-block; }
+      .il-magnetic { transition: transform .22s cubic-bezier(.2,.8,.2,1); }
       .il-pill:hover { background: #e64400; transform: scale(1.03); }
       .il-pill.scrolled { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); animation: il-pill-glow 3s ease-in-out infinite; }
       @keyframes il-pill-glow { 0%,100% { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); } 50% { box-shadow: 0 0 0 1px rgba(255,77,0,.6), 0 4px 32px rgba(255,77,0,.5); } }
@@ -1117,10 +1442,24 @@ export default function LandingPage() {
     transition: `opacity 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms, transform 0.9s cubic-bezier(0.16,1,0.3,1) ${delay}ms`,
   })
 
-  const addCursorTarget = (type: 'hover' | 'drag') => ({
-    onMouseEnter: () => setCursorType(type),
-    onMouseLeave: () => setCursorType('default'),
-  })
+  const addCursorTarget = (type: 'hover' | 'drag', opts?: { magnetic?: boolean; strength?: number }) => {
+    const magnetic = !!opts?.magnetic && isDesktop
+    const strength = opts?.strength ?? 0.3
+    return {
+      onMouseEnter: () => setCursorType(type),
+      onMouseMove: magnetic ? (e: React.MouseEvent<HTMLElement>) => {
+        const el = e.currentTarget
+        const rect = el.getBoundingClientRect()
+        const relX = e.clientX - rect.left - rect.width / 2
+        const relY = e.clientY - rect.top - rect.height / 2
+        el.style.transform = `translate(${relX * strength}px, ${relY * strength}px)`
+      } : undefined,
+      onMouseLeave: (e: React.MouseEvent<HTMLElement>) => {
+        setCursorType('default')
+        if (magnetic) (e.currentTarget as HTMLElement).style.transform = ''
+      },
+    }
+  }
 
   const hasPhotos = s.hero_photos && s.hero_photos.length > 0
 
@@ -1165,7 +1504,7 @@ export default function LandingPage() {
       )}
 
       {/* ── WA FAB ── */}
-      <a href={wa('Halo Iranza Live')} className="il-wa-fab" target="_blank" rel="noopener" {...addCursorTarget('hover')}>💬</a>
+      <a href={wa('Halo Iranza Live')} className="il-wa-fab il-magnetic" target="_blank" rel="noopener" {...addCursorTarget('hover', { magnetic: true, strength: 0.4 })}>💬</a>
 
       {/* ── NAVBAR ── */}
       <nav className={`il-header-bar${scrolled ? ' scrolled' : ''}`} style={{
@@ -1199,9 +1538,9 @@ export default function LandingPage() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <a
             href={wa('Halo Iranza Live, mau booking')}
-            className={`il-pill${scrolled ? ' scrolled' : ''}`}
+            className={`il-pill il-magnetic${scrolled ? ' scrolled' : ''}`}
             target="_blank"
-            {...addCursorTarget('hover')}
+            {...addCursorTarget('hover', { magnetic: true })}
           >
             Book Now
           </a>
@@ -1304,7 +1643,7 @@ export default function LandingPage() {
           </div>
 
           <div className="il-hero-cta" style={{ display: 'flex', flexDirection: 'column', alignItems: isMobile ? 'flex-start' : 'flex-end', gap: 14 }}>
-            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="il-btn-pri" target="_blank" {...addCursorTarget('hover')}>
+            <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="il-btn-pri il-magnetic" target="_blank" {...addCursorTarget('hover', { magnetic: true })}>
               Mulai Sekarang <span>→</span>
             </a>
             <a href="#pricing" className="il-btn-ghost" {...addCursorTarget('hover')}>
@@ -1339,6 +1678,12 @@ export default function LandingPage() {
             willChange: 'transform',
           }}>01</div>
         </div>
+
+        {!isMobile && (
+          <div style={{ position: 'absolute', top: '8%', right: '6%', width: 340, height: 340, zIndex: 0, opacity: 0.5 }}>
+            <FloatingShape3D shape="icosahedron" color={0xFF4D00} size={1.5} />
+          </div>
+        )}
 
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
@@ -1406,19 +1751,41 @@ export default function LandingPage() {
           </div>
 
           {hasPhotos ? (
-            <div
-              data-rid="work-photos"
-              style={{
-                ...rv('work-photos', 100),
-                // Desktop: bleed out of the container to full viewport width
-                // Mobile: reset margin to 0, negative bleed breaks layout on narrow screens
-                marginLeft: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
-                marginRight: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
-                overflow: 'hidden',
-              }}
-            >
-              <PhotoStrip photos={s.hero_photos} inline />
-            </div>
+            <>
+              {!isMobile && (
+                <div
+                  data-rid="work-feature"
+                  style={{ ...rv('work-feature', 60), marginBottom: 28, position: 'relative' }}
+                >
+                  <DistortedImage
+                    src={getCloudinaryThumbnail(s.hero_photos[0].cloudinary_url, 1400, 560)}
+                    alt={s.hero_photos[0].caption || 'Studio Iranza Live'}
+                    style={{ width: '100%', height: 420, borderRadius: 12, border: '1px solid var(--border)' }}
+                  />
+                  <span style={{
+                    position: 'absolute', bottom: 16, left: 16,
+                    fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase',
+                    color: 'rgba(242,239,232,0.65)', background: 'rgba(10,10,10,0.55)', backdropFilter: 'blur(8px)',
+                    padding: '6px 12px', borderRadius: 100, pointerEvents: 'none',
+                  }}>
+                    ↝ Gerakkan kursor di atas foto
+                  </span>
+                </div>
+              )}
+              <div
+                data-rid="work-photos"
+                style={{
+                  ...rv('work-photos', 100),
+                  // Desktop: bleed out of the container to full viewport width
+                  // Mobile: reset margin to 0, negative bleed breaks layout on narrow screens
+                  marginLeft: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
+                  marginRight: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
+                  overflow: 'hidden',
+                }}
+              >
+                <PhotoStrip photos={s.hero_photos} inline />
+              </div>
+            </>
           ) : (
             /* Honest fallback — no fake photos, just what we can verify in text */
             <div
@@ -1484,7 +1851,7 @@ export default function LandingPage() {
                 Kamu fokus di produk dan operasional toko. Kami urus semuanya di depan kamera — dari persiapan,
                 eksekusi live, sampai laporan hasil sesi yang kamu terima setiap selesai.
               </p>
-              <a href={wa('Halo Iranza Live, mau konsultasi gratis')} className="il-btn-pri" target="_blank" style={{ fontSize: 14, padding: '14px 28px' }} {...addCursorTarget('hover')}>
+              <a href={wa('Halo Iranza Live, mau konsultasi gratis')} className="il-btn-pri il-magnetic" target="_blank" style={{ fontSize: 14, padding: '14px 28px' }} {...addCursorTarget('hover', { magnetic: true })}>
                 Konsultasi Gratis →
               </a>
             </div>
@@ -1521,8 +1888,13 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           PRICING
       ══════════════════════════════════════════════ */}
-      <section id="pricing" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)' }}>
-        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <section id="pricing" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+        {!isMobile && (
+          <div style={{ position: 'absolute', top: '4%', left: '2%', width: 300, height: 300, zIndex: 0, opacity: 0.4 }}>
+            <FloatingShape3D shape="torus" color={0x7C3AED} size={1.3} />
+          </div>
+        )}
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
             <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>04 — Pricing</SplitWords>
@@ -1619,13 +1991,14 @@ export default function LandingPage() {
             <a
               href={wa('Halo Iranza Live, mau book slot promo!')}
               target="_blank"
+              className="il-magnetic"
               style={{
                 fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: '.12em',
                 textTransform: 'uppercase', background: 'white', color: '#FF4D00',
                 padding: '14px 24px', borderRadius: 3, whiteSpace: 'nowrap',
                 display: 'block', textAlign: 'center',
               }}
-              {...addCursorTarget('hover')}
+              {...addCursorTarget('hover', { magnetic: true })}
             >
               Book via WhatsApp →
             </a>
