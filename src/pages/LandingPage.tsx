@@ -4,7 +4,7 @@
  * Clean minimalist + 3D playful elements
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, isValidElement, cloneElement, Fragment, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '@/lib/supabase'
 import { getCloudinaryThumbnail } from '@/lib/cloudinary'
@@ -504,6 +504,93 @@ function NavIcon({ d, size = 14 }: { d: string; size?: number }) {
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <path d={d} />
     </svg>
+  )
+}
+
+/**
+ * Recursively walks JSX children, splitting plain-text nodes into per-word
+ * <span> masks that slide/fade in on scroll — while leaving element nodes
+ * (like <em> or <br/>) intact so existing styling keeps working.
+ * `counter` is a shared mutable ref so stagger delay continues across
+ * nested elements (e.g. the <em> word picks up where the previous left off).
+ */
+function splitTextAnimated(
+  node: ReactNode,
+  counter: { i: number },
+  shown: boolean,
+  step: number,
+): ReactNode {
+  if (typeof node === 'string') {
+    const words = node.split(' ')
+    return words.map((w, idx) => {
+      if (w === '') return idx < words.length - 1 ? ' ' : null
+      const delay = counter.i * step
+      counter.i++
+      return (
+        <span key={`${counter.i}-${w}`} style={{ display: 'inline-block', overflow: 'hidden', verticalAlign: 'top' }}>
+          <span style={{
+            display: 'inline-block',
+            transform: shown ? 'translateY(0)' : 'translateY(112%)',
+            opacity: shown ? 1 : 0,
+            transition: `transform .7s cubic-bezier(.16,1,.3,1) ${delay}ms, opacity .55s ease ${delay}ms`,
+          }}>{w}</span>
+          {idx < words.length - 1 ? '\u00A0' : ''}
+        </span>
+      )
+    })
+  }
+  if (Array.isArray(node)) {
+    return node.map((n, i) => <Fragment key={i}>{splitTextAnimated(n, counter, shown, step)}</Fragment>)
+  }
+  if (isValidElement(node)) {
+    if (node.type === 'br') return node
+    const children = splitTextAnimated((node.props as { children?: ReactNode }).children, counter, shown, step)
+    return cloneElement(node, undefined, children)
+  }
+  return node
+}
+
+/** Word-by-word scroll reveal for headings — handles nested <em>/<br/> safely. */
+function SplitHeading({ children, as: Tag = 'h2', style, step = 28 }: {
+  children: ReactNode; as?: keyof JSX.IntrinsicElements; style?: React.CSSProperties; step?: number
+}) {
+  const ref = useRef<HTMLElement>(null)
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setShown(true); io.disconnect() }
+    }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  const counter = { i: 0 }
+  return (
+    // @ts-expect-error — dynamic tag + ref typing is intentionally loose here
+    <Tag ref={ref} style={style}>{splitTextAnimated(children, counter, shown, step)}</Tag>
+  )
+}
+
+/** Same reveal, lighter-weight, for plain-string labels/paragraphs (no nested elements). */
+function SplitWords({ children, as: Tag = 'span', className, style, step = 22 }: {
+  children: string; as?: keyof JSX.IntrinsicElements; className?: string; style?: React.CSSProperties; step?: number
+}) {
+  const ref = useRef<HTMLElement>(null)
+  const [shown, setShown] = useState(false)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      if (e.isIntersecting) { setShown(true); io.disconnect() }
+    }, { threshold: 0.15, rootMargin: '0px 0px -10% 0px' })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [])
+  const counter = { i: 0 }
+  return (
+    // @ts-expect-error — dynamic tag + ref typing is intentionally loose here
+    <Tag ref={ref} className={className} style={style}>{splitTextAnimated(children, counter, shown, step)}</Tag>
   )
 }
 
@@ -1257,11 +1344,11 @@ export default function LandingPage() {
 
           {/* Section header */}
           <div data-rid="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>01 — Services</span>
+            <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>01 — Services</SplitWords>
             <div>
-              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+              <SplitHeading style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
                 Kami kelola <em style={{ color: '#FF4D00' }}>semuanya</em><br />— kamu fokus produk.
-              </h2>
+              </SplitHeading>
               <p style={{ marginTop: 20, fontSize: 15, lineHeight: 1.85, color: 'var(--muted)', maxWidth: 480 }}>
                 Tim dedicated yang berdedikasi — setiap sesi dirancang untuk menciptakan momen live yang engaging, memorable, dan yang paling penting: menghasilkan penjualan.
               </p>
@@ -1305,11 +1392,11 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 64, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — Work</span>
+            <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>02 — Work</SplitWords>
             <div>
-              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+              <SplitHeading style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
                 Di balik layar <em style={{ color: '#FF4D00' }}>studio kami.</em>
-              </h2>
+              </SplitHeading>
               <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 440 }}>
                 {hasPhotos
                   ? 'Setup profesional, host terlatih, atmosfer yang mendorong penjualan — lihat sendiri.'
@@ -1367,15 +1454,15 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
           <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>03 — About</span>
-            <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+            <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>03 — About</SplitWords>
+            <SplitHeading style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
               Kami ada untuk <em style={{ color: '#FF4D00' }}>hasilkan penjualan</em>,<br />bukan sekadar tampil.
-            </h2>
+            </SplitHeading>
           </div>
 
           <div className="il-about-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 32 : 80, alignItems: 'start', marginBottom: isMobile ? 36 : 80 }}>
             <div data-rid="about-1" style={rv('about-1')}>
-              <p style={{
+              <SplitHeading as="p" step={20} style={{
                 fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 700,
                 fontSize: 'clamp(24px,2.8vw,40px)', lineHeight: 1.35, letterSpacing: '-0.02em',
                 color: '#F2EFE8',
@@ -1383,7 +1470,7 @@ export default function LandingPage() {
                 Toko kamu punya produk bagus.<br />
                 Masalahnya, <em style={{ color: '#FF4D00' }}>tidak ada yang tahu.</em><br /><br />
                 Kami ubah itu.
-              </p>
+              </SplitHeading>
             </div>
             <div data-rid="about-2" style={rv('about-2')}>
               <p style={{ fontSize: 15, lineHeight: 1.9, color: 'var(--muted)', marginBottom: 36 }}>
@@ -1423,7 +1510,7 @@ export default function LandingPage() {
                 borderRight: i < 2 ? '1px solid var(--border)' : 'none',
               }}>
                 <div style={{ fontSize: 32, marginBottom: 18 }}>{st.icon}</div>
-                <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F2EFE8', marginBottom: 6 }}>{st.label}</div>
+                <SplitWords as="div" step={18} style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 18, fontWeight: 700, color: '#F2EFE8', marginBottom: 6 }}>{st.label}</SplitWords>
                 <p style={{ fontSize: 13, lineHeight: 1.7, color: 'var(--muted)' }}>{st.sub}</p>
               </div>
             ))}
@@ -1438,11 +1525,11 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
           <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>04 — Pricing</span>
+            <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>04 — Pricing</SplitWords>
             <div>
-              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+              <SplitHeading style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
                 Promo Launching. <em style={{ color: '#FF4D00' }}>Terbatas.</em>
-              </h2>
+              </SplitHeading>
               <p style={{ marginTop: 18, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 480 }}>
                 Harga ini tidak akan berlaku selamanya. 4 slot per hari, first come first served.
               </p>
@@ -1563,13 +1650,13 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, paddingBottom: isMobile ? 60 : 100 }}>
 
           <div data-rid="proses-h" style={{ ...rv('proses-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 64, alignItems: 'start' }}>
-            <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>
+            <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>
               05 — Proses
-            </span>
+            </SplitWords>
             <div>
-              <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
+              <SplitHeading style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
                 Apa yang kamu <em style={{ color: '#FF4D00' }}>dapat</em> dari kami.
-              </h2>
+              </SplitHeading>
               <p style={{ marginTop: 16, fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 460 }}>
                 Kami masih tahap awal membangun Iranza Live — jujur soal itu. Yang bisa kami pastikan: prosesnya jelas, dan kamu lihat sendiri hasilnya tiap sesi.
               </p>
@@ -1619,13 +1706,13 @@ export default function LandingPage() {
           gap: isMobile ? 36 : 80, alignItems: 'center', position: 'relative', zIndex: 1,
         }}>
           <div>
-            <h2 style={{
+            <SplitHeading style={{
               fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900,
               fontSize: 'clamp(36px,5vw,70px)', lineHeight: 1, letterSpacing: '-0.03em',
               color: '#0A0A0A',
             }}>
               Toko kamu bisa<br />lebih <em style={{ color: '#FF4D00' }}>ramai dari ini.</em>
-            </h2>
+            </SplitHeading>
             <p style={{ marginTop: 20, fontSize: 16, lineHeight: 1.75, color: 'rgba(10,10,10,0.45)', maxWidth: 460 }}>
               Satu sesi live bisa mengubah hari yang sepi jadi hari yang ramai. Slot terbatas — book sekarang.
             </p>
