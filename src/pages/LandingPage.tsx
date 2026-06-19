@@ -1199,8 +1199,10 @@ export default function LandingPage() {
               data-rid="work-photos"
               style={{
                 ...rv('work-photos', 100),
-                marginLeft: 'calc(-1 * ((100vw - 1240px) / 2))',
-                marginRight: 'calc(-1 * ((100vw - 1240px) / 2))',
+                // Desktop: bleed out of the container to full viewport width
+                // Mobile: reset margin to 0, negative bleed breaks layout on narrow screens
+                marginLeft: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
+                marginRight: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
                 overflow: 'hidden',
               }}
             >
