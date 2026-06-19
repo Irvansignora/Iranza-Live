@@ -5,6 +5,42 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Iranza Live — Dashboard Agency</title>
+
+    <!--
+      TEMPORARY MOBILE DEBUG CONSOLE
+      ===============================
+      Visit the site as https://iranza.com/?debug=1 (once) on the phone
+      that's having trouble. This shows a small floating button (bottom
+      corner) — tap it to open a console panel showing JS errors, network
+      requests, etc., right there on the phone. No USB/cable needed.
+
+      The flag persists in localStorage, so subsequent visits without
+      ?debug=1 still show it until you turn it off with ?debug=0.
+
+      Loaded with document.write on purpose (not async) so it's ready
+      BEFORE the React app (the module script below, which only runs
+      after the page finishes parsing) — this way it can also catch
+      errors that happen very early during app boot, not just ones that
+      happen after the page already rendered something.
+
+      REMOVE THIS BLOCK once debugging is done — it's not meant to stay
+      in production long-term.
+    -->
+    <script>
+      (function () {
+        var params = new URLSearchParams(location.search);
+        if (params.get('debug') === '0') {
+          localStorage.removeItem('iranza_debug');
+        } else if (params.get('debug') === '1') {
+          localStorage.setItem('iranza_debug', '1');
+        }
+        if (localStorage.getItem('iranza_debug') === '1') {
+          document.write('<script src="https://cdn.jsdelivr.net/npm/eruda"><\/script>');
+          document.write('<script>eruda.init();<\/script>');
+        }
+      })();
+    </script>
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,700;1,9..40,300&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet" />
