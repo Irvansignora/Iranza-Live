@@ -10,17 +10,8 @@ import { supabase } from '@/lib/supabase'
 import { getCloudinaryThumbnail } from '@/lib/cloudinary'
 import { gsap } from 'gsap'
 import { ScrollTrigger } from 'gsap/ScrollTrigger'
-import { Sparkles, Briefcase, Tag, Workflow, Menu, X, MessageCircle } from 'lucide-react'
 
 gsap.registerPlugin(ScrollTrigger)
-
-/* ─── Nav config ────────────────────────────────────── */
-const NAV_ITEMS = [
-  { href: '#services', label: 'Services', icon: Sparkles },
-  { href: '#work', label: 'Work', icon: Briefcase },
-  { href: '#pricing', label: 'Pricing', icon: Tag },
-  { href: '#proses', label: 'Proses', icon: Workflow },
-]
 
 /* ─── Types ─────────────────────────────────────────── */
 interface HeroPhoto {
@@ -824,8 +815,11 @@ export default function LandingPage() {
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
-  const [activeSection, setActiveSection] = useState('#services')
+  const navLinks: [string, string][] = [['#services', 'Services'], ['#work', 'Work'], ['#pricing', 'Pricing'], ['#proses', 'Proses']]
+  const navCapsuleRef = useRef<HTMLDivElement>(null)
+  const navLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({})
+  const [activeSection, setActiveSection] = useState('')
+  const [highlight, setHighlight] = useState({ left: 0, width: 0, opacity: 0 })
 
   // Inject page-level styles into <head> instead of rendering a <style> tag inside
   // the React tree. Inline <style> nodes are a known cause of React DOM reconciliation
@@ -854,59 +848,22 @@ export default function LandingPage() {
       .il-btn-pri:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 20px 56px rgba(255,77,0,.4); }
       .il-btn-ghost { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; transition: color .2s; }
       .il-btn-ghost:hover { color: var(--paper); }
-      .il-nav-links { display: flex; align-items: center; gap: 2px; }
-      .il-navpill {
-        display: flex; align-items: center; gap: 6px;
-        background: linear-gradient(180deg, rgba(28,28,30,0.78), rgba(14,14,15,0.78));
-        backdrop-filter: blur(24px) saturate(180%);
-        -webkit-backdrop-filter: blur(24px) saturate(180%);
-        border: 1px solid rgba(242,239,232,0.09);
-        border-radius: 999px;
-        box-shadow: 0 1px 0 rgba(242,239,232,0.08) inset,
-                    0 -1px 0 rgba(0,0,0,0.4) inset,
-                    0 20px 50px rgba(0,0,0,0.45),
-                    0 0 0 1px rgba(0,0,0,0.2);
-        padding: 7px 7px 7px 22px;
-        transition: padding .4s cubic-bezier(.23,1,.32,1), box-shadow .4s, background .4s;
-      }
-      .il-navitem {
-        font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
-        letter-spacing: .1em; text-transform: uppercase; color: var(--muted);
-        display: inline-flex; align-items: center; gap: 7px;
-        padding: 10px 16px; border-radius: 999px; white-space: nowrap;
-        transition: color .3s, background .35s cubic-bezier(.23,1,.32,1);
-      }
-      .il-navitem svg { transition: color .3s, stroke .3s; opacity: .8; }
-      .il-navitem:hover { color: var(--paper); background: rgba(242,239,232,0.06); }
-      .il-navitem.active { color: var(--paper); background: rgba(255,77,0,0.16); box-shadow: 0 0 0 1px rgba(255,77,0,0.3) inset; }
-      .il-navitem.active svg { color: var(--orange); opacity: 1; }
-      .il-nav-cta {
-        font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700;
-        letter-spacing: .1em; text-transform: uppercase; background: var(--orange); color: white;
-        padding: 11px 22px; border-radius: 999px; display: inline-flex; align-items: center; gap: 8px;
-        box-shadow: 0 6px 20px rgba(255,77,0,.35), 0 1px 0 rgba(255,255,255,.25) inset;
-        transition: background .25s, transform .25s, box-shadow .25s;
-      }
-      .il-nav-cta:hover { background: #e64400; transform: scale(1.04); box-shadow: 0 8px 26px rgba(255,77,0,.5), 0 1px 0 rgba(255,255,255,.25) inset; }
-      .il-nav-burger {
-        width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-        background: rgba(242,239,232,0.06); border: 1px solid rgba(242,239,232,0.1); color: var(--paper);
-        transition: background .25s, transform .2s;
-      }
-      .il-nav-burger:active { transform: scale(.92); }
-      .il-mobile-sheet {
-        position: fixed; top: 76px; left: 16px; right: 16px; z-index: 490;
-        background: linear-gradient(180deg, rgba(20,20,21,0.96), rgba(10,10,10,0.96));
-        backdrop-filter: blur(24px) saturate(180%); -webkit-backdrop-filter: blur(24px) saturate(180%);
-        border: 1px solid rgba(242,239,232,0.09); border-radius: 24px;
-        box-shadow: 0 24px 60px rgba(0,0,0,0.55);
-        padding: 10px; display: flex; flex-direction: column; gap: 4px;
-        opacity: 0; transform: translateY(-12px) scale(.98); pointer-events: none;
-        transition: opacity .3s cubic-bezier(.23,1,.32,1), transform .3s cubic-bezier(.23,1,.32,1);
-      }
-      .il-mobile-sheet.open { opacity: 1; transform: translateY(0) scale(1); pointer-events: auto; }
-      .il-mobile-sheet .il-navitem { font-size: 12px; padding: 14px 18px; justify-content: flex-start; }
-      .il-mobile-sheet .il-nav-cta { justify-content: center; margin-top: 6px; }
+      .il-nav-link { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); position: relative; transition: color .2s; }
+      .il-nav-link::after { content: ''; position: absolute; bottom: -3px; left: 0; right: 0; height: 1px; background: var(--orange); transform: scaleX(0); transform-origin: left; transition: transform .3s cubic-bezier(.23,1,.32,1); }
+      .il-nav-link:hover { color: var(--paper); }
+      .il-nav-link:hover::after { transform: scaleX(1); }
+      .il-pill { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; background: var(--orange); color: white; padding: 11px 26px; border-radius: 100px; transition: background .25s, transform .2s, box-shadow .4s; display: inline-block; }
+      .il-pill:hover { background: #e64400; transform: scale(1.03); }
+      .il-pill.scrolled { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); animation: il-pill-glow 3s ease-in-out infinite; }
+      @keyframes il-pill-glow { 0%,100% { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); } 50% { box-shadow: 0 0 0 1px rgba(255,77,0,.6), 0 4px 32px rgba(255,77,0,.5); } }
+      .il-logo-badge { display: flex; align-items: center; border-radius: 100px; border: 1px solid transparent; transition: background .45s cubic-bezier(.23,1,.32,1), border-color .45s, padding .45s cubic-bezier(.23,1,.32,1), box-shadow .45s; }
+      .il-logo-badge.scrolled { background: rgba(17,17,17,0.72); border-color: var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 6px 16px 6px 6px; box-shadow: 0 8px 28px rgba(0,0,0,.35); }
+      .il-nav-capsule { display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 100px; position: relative; background: transparent; border: 1px solid transparent; transition: background .45s cubic-bezier(.23,1,.32,1), border-color .45s, box-shadow .45s, padding .45s; }
+      .il-nav-capsule.scrolled { background: rgba(17,17,17,0.72); border-color: var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,77,0,.04); }
+      .il-nav-highlight { position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; border-radius: 100px; background: linear-gradient(135deg, rgba(255,77,0,.22), rgba(255,77,0,.06)); border: 1px solid rgba(255,77,0,.35); box-shadow: 0 0 18px rgba(255,77,0,.3); opacity: 0; pointer-events: none; transition: left .5s cubic-bezier(.23,1,.32,1), width .5s cubic-bezier(.23,1,.32,1), opacity .35s; }
+      .il-nav-link-pill { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 9px 18px; border-radius: 100px; position: relative; z-index: 1; white-space: nowrap; transition: color .25s; }
+      .il-nav-link-pill:hover { color: var(--paper); }
+      .il-nav-link-pill.active { color: var(--paper); }
       .il-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #EF4444; animation: il-pulse 1.5s ease-in-out infinite; }
       @keyframes il-pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
       .il-marquee { display: flex; width: max-content; animation: il-scroll 28s linear infinite; }
@@ -936,8 +893,8 @@ export default function LandingPage() {
         .il-footer-grid { grid-template-columns: 1fr 1fr !important; }
       }
       @media (max-width: 768px) {
-        .il-navpill { padding: 6px 6px 6px 18px !important; }
         .il-hero-h1 { font-size: clamp(44px,13vw,80px) !important; }
+        .il-nav-links .il-nav-link { display: none !important; }
         .il-hero-bottom { grid-template-columns: 1fr !important; gap: 20px !important; }
         .il-stats-grid { grid-template-columns: 1fr !important; }
         .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
@@ -969,27 +926,39 @@ export default function LandingPage() {
     setIsMobile(!mq.matches)
   }, [])
 
-  // Scroll handler
+  // Scroll handler — tracks header shrink state + which section is active
   useEffect(() => {
-    const sectionIds = NAV_ITEMS.map(n => n.href.slice(1))
-    const h = () => {
+    const sectionIds = navLinks.map(([href]) => href.slice(1))
+    const onScroll = () => {
       setScrolled(window.scrollY > 60)
-      let current = sectionIds[0]
+      let current = ''
       for (const id of sectionIds) {
         const el = document.getElementById(id)
-        if (el && el.getBoundingClientRect().top <= 140) current = id
+        if (el) {
+          const rect = el.getBoundingClientRect()
+          if (rect.top <= 140 && rect.bottom > 140) { current = id; break }
+        }
       }
-      setActiveSection('#' + current)
+      setActiveSection(current)
     }
-    window.addEventListener('scroll', h, { passive: true })
-    h()
-    return () => window.removeEventListener('scroll', h)
+    window.addEventListener('scroll', onScroll, { passive: true })
+    onScroll()
+    return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
-  // Close mobile menu on resize back to desktop
+  // Slide the highlight pill under whichever nav link is currently active
   useEffect(() => {
-    if (isDesktop) setMobileMenuOpen(false)
-  }, [isDesktop])
+    const key = activeSection ? `#${activeSection}` : ''
+    const el = key ? navLinkRefs.current[key] : null
+    const container = navCapsuleRef.current
+    if (el && container) {
+      const elRect = el.getBoundingClientRect()
+      const contRect = container.getBoundingClientRect()
+      setHighlight({ left: elRect.left - contRect.left, width: elRect.width, opacity: 1 })
+    } else {
+      setHighlight(h => ({ ...h, opacity: 0 }))
+    }
+  }, [activeSection, isMobile])
 
   // Custom cursor
   useEffect(() => {
@@ -1033,7 +1002,6 @@ export default function LandingPage() {
 
   return (
     <div
-      id="top"
       translate="no"
       style={{
         background: '#0A0A0A',
@@ -1078,82 +1046,44 @@ export default function LandingPage() {
       {/* ── NAVBAR ── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
-        display: 'flex', justifyContent: 'center',
-        padding: isMobile ? (scrolled ? '10px 16px' : '14px 16px') : (scrolled ? '12px 32px' : '20px 48px'),
-        transition: 'padding .4s cubic-bezier(.23,1,.32,1)',
+        padding: isMobile ? '12px 20px' : scrolled ? '16px 32px' : '24px 48px',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: scrolled ? 'transparent' : 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.3) 60%, transparent 100%)',
+        transition: 'padding .45s cubic-bezier(.23,1,.32,1), background .4s',
       }}>
-        <div className="il-navpill" style={{ width: isMobile ? '100%' : 'auto', maxWidth: 880 }}>
-          <a href="#top" style={{ display: 'flex', alignItems: 'center', flexShrink: 0, marginRight: isMobile ? 'auto' : 28 }} {...addCursorTarget('hover')}>
-            <BrandLogo logoUrl={s.logo_url} size={isMobile ? 28 : 34} />
-          </a>
-
-          {!isMobile && (
-            <div className="il-nav-links">
-              {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
-                <a
-                  key={href}
-                  href={href}
-                  className={`il-navitem ${activeSection === href ? 'active' : ''}`}
-                  {...addCursorTarget('hover')}
-                >
-                  <Icon size={13} strokeWidth={2.25} />
-                  <span>{label}</span>
-                </a>
-              ))}
-            </div>
-          )}
-
-          {isMobile ? (
-            <button
-              className="il-nav-burger"
-              onClick={() => setMobileMenuOpen(v => !v)}
-              aria-label={mobileMenuOpen ? 'Tutup menu' : 'Buka menu'}
-              aria-expanded={mobileMenuOpen}
-            >
-              {mobileMenuOpen ? <X size={17} /> : <Menu size={17} />}
-            </button>
-          ) : (
-            <a
-              href={wa('Halo Iranza Live, mau booking')}
-              className="il-nav-cta"
-              target="_blank"
-              rel="noopener"
-              style={{ marginLeft: 6 }}
-              {...addCursorTarget('hover')}
-            >
-              <MessageCircle size={13} strokeWidth={2.25} />
-              <span>Book Now</span>
-            </a>
-          )}
+        <div className={`il-logo-badge${scrolled ? ' scrolled' : ''}`}>
+          <BrandLogo logoUrl={s.logo_url} size={isMobile ? 36 : scrolled ? 38 : 52} />
         </div>
-      </nav>
 
-      {/* ── MOBILE MENU SHEET ── */}
-      {isMobile && (
-        <div className={`il-mobile-sheet ${mobileMenuOpen ? 'open' : ''}`}>
-          {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+        <div
+          ref={navCapsuleRef}
+          className={`il-nav-capsule${scrolled ? ' scrolled' : ''}`}
+          style={{ display: isMobile ? 'none' : 'flex' }}
+        >
+          <div className="il-nav-highlight" style={{ left: highlight.left, width: highlight.width, opacity: highlight.opacity }} />
+          {navLinks.map(([href, label]) => (
             <a
               key={href}
               href={href}
-              className={`il-navitem ${activeSection === href ? 'active' : ''}`}
-              onClick={() => setMobileMenuOpen(false)}
+              ref={(el) => { navLinkRefs.current[href] = el }}
+              className={`il-nav-link-pill${activeSection === href.slice(1) ? ' active' : ''}`}
+              {...addCursorTarget('hover')}
             >
-              <Icon size={15} strokeWidth={2.25} />
-              <span>{label}</span>
+              {label}
             </a>
           ))}
-          <a
-            href={wa('Halo Iranza Live, mau booking')}
-            className="il-nav-cta"
-            target="_blank"
-            rel="noopener"
-            onClick={() => setMobileMenuOpen(false)}
-          >
-            <MessageCircle size={14} strokeWidth={2.25} />
-            <span>Book Now</span>
-          </a>
         </div>
-      )}
+
+        <a
+          href={wa('Halo Iranza Live, mau booking')}
+          className={`il-pill${scrolled ? ' scrolled' : ''}`}
+          target="_blank"
+          {...addCursorTarget('hover')}
+        >
+          Book Now
+        </a>
+      </nav>
+
 
       {/* Explicit spacer reserving room for the fixed navbar above — this
           is a real block-level element in normal document flow, so it
