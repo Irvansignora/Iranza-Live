@@ -101,6 +101,9 @@ function useGsapParallax(speed = 0.15) {
   const bgRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    // Skip parallax on mobile — it's a decorative effect and GSAP ScrollTrigger
+    // can conflict with React's DOM reconciliation on narrow viewports.
+    if (!window.matchMedia('(min-width:769px)').matches) return
     if (!sectionRef.current || !bgRef.current) return
     const tween = gsap.to(bgRef.current, {
       yPercent: speed * 100,
@@ -112,7 +115,11 @@ function useGsapParallax(speed = 0.15) {
         scrub: true,
       },
     })
-    return () => { tween.scrollTrigger?.kill(); tween.kill() }
+    return () => {
+      tween.scrollTrigger?.kill()
+      tween.kill()
+      if (bgRef.current) gsap.set(bgRef.current, { clearProps: 'transform' })
+    }
   }, [speed])
 
   return { sectionRef, bgRef }
@@ -505,30 +512,36 @@ function ProsesScrollStory({ sectionNum }: { sectionNum: string }) {
   const pinRef = useRef<HTMLDivElement>(null)
   const stepRefs = useRef<(HTMLDivElement | null)[]>([])
   const progressRef = useRef<HTMLDivElement>(null)
-  const [isDesktopStory, setIsDesktopStory] = useState(true)
+  // null = not yet detected. Avoids rendering desktop GSAP layout on mobile
+  // before matchMedia runs (caused removeChild crashes when GSAP pinned
+  // elements that React then tried to unmount).
+  const [isDesktopStory, setIsDesktopStory] = useState<boolean | null>(null)
 
   useEffect(() => {
-    setIsDesktopStory(window.matchMedia('(min-width:769px)').matches)
+    const mq = window.matchMedia('(min-width:769px)')
+    setIsDesktopStory(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setIsDesktopStory(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [])
 
   useEffect(() => {
-    if (!isDesktopStory) return // pinned scroll-story is desktop-only; mobile gets a simple stacked layout below
+    if (!isDesktopStory) return
     if (!wrapRef.current || !pinRef.current) return
 
     const steps = stepRefs.current.filter(Boolean) as HTMLDivElement[]
     if (steps.length === 0) return
 
+    let destroyed = false
     const n = steps.length
     let activeIndex = 0
 
-    // Start every step hidden except the first
     steps.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, y: i === 0 ? 0 : 40, scale: i === 0 ? 1 : 0.96 }))
 
     function goToStep(index: number) {
-      if (index === activeIndex) return
+      if (index === activeIndex || destroyed) return
       const prevIndex = activeIndex
       activeIndex = index
-
       gsap.to(steps[prevIndex], { opacity: 0, y: -30, scale: 0.96, duration: 0.3, ease: 'power2.in', overwrite: true })
       gsap.fromTo(steps[index], { opacity: 0, y: 40, scale: 0.96 }, { opacity: 1, y: 0, scale: 1, duration: 0.35, ease: 'power2.out', overwrite: true })
     }
@@ -541,17 +554,23 @@ function ProsesScrollStory({ sectionNum }: { sectionNum: string }) {
       pin: pinRef.current,
       pinSpacing: true,
       onUpdate: (self) => {
+        if (destroyed) return
         if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
         const stepIndex = Math.min(n - 1, Math.floor(self.progress * n))
         goToStep(stepIndex)
       },
     })
 
-    return () => trigger.kill()
+    return () => {
+      destroyed = true
+      trigger.kill()
+      // Reset inline styles GSAP applied so React can safely take back DOM control
+      steps.forEach(el => gsap.set(el, { clearProps: 'all' }))
+    }
   }, [isDesktopStory])
 
-  if (!isDesktopStory) {
-    // Mobile fallback: simple stacked cards, no pin (pinning is unreliable on mobile viewports/URL bars)
+  if (isDesktopStory !== true) {
+    // Mobile fallback (also covers null = not yet detected): simple stacked cards, no pin
     return (
       <div style={{ display: 'grid', gap: 12 }}>
         {PROSES_STEPS.map((p) => (
@@ -622,10 +641,15 @@ function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
   const numRefs = useRef<(HTMLDivElement | null)[]>([])
   const progressRef = useRef<HTMLDivElement>(null)
   const dotRefs = useRef<(HTMLDivElement | null)[]>([])
-  const [isDesktopStory, setIsDesktopStory] = useState(true)
+  // null = not yet detected. Avoids running GSAP pin on mobile before matchMedia runs.
+  const [isDesktopStory, setIsDesktopStory] = useState<boolean | null>(null)
 
   useEffect(() => {
-    setIsDesktopStory(window.matchMedia('(min-width:769px)').matches)
+    const mq = window.matchMedia('(min-width:769px)')
+    setIsDesktopStory(mq.matches)
+    const onChange = (e: MediaQueryListEvent) => setIsDesktopStory(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
   }, [])
 
   useEffect(() => {
@@ -637,16 +661,16 @@ function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
     const dots = dotRefs.current.filter(Boolean) as HTMLDivElement[]
     if (steps.length === 0) return
 
+    let destroyed = false
     const n = steps.length
     let activeIndex = 0
 
-    // Initial state: only step 0 visible
     steps.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, x: i === 0 ? 0 : 60 }))
     nums.forEach((el, i) => gsap.set(el, { opacity: i === 0 ? 1 : 0, scale: i === 0 ? 1 : 0.85 }))
     dots.forEach((el, i) => gsap.set(el, { background: i === 0 ? SERVICES[0].color : 'var(--border)', scale: i === 0 ? 1.3 : 1 }))
 
     function goToStep(index: number) {
-      if (index === activeIndex) return
+      if (index === activeIndex || destroyed) return
       const prevIndex = activeIndex
       activeIndex = index
 
@@ -659,9 +683,6 @@ function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
       gsap.to(dots[index], { background: SERVICES[index].color, scale: 1.3, duration: 0.25, overwrite: true })
     }
 
-    // Each step gets an equal slice of the scroll progress (0..1). A small
-    // dead-zone is reserved at the very start/end of each slice so the
-    // active card has time to fully settle before the next switch fires.
     const trigger = ScrollTrigger.create({
       trigger: wrapRef.current,
       start: 'top top',
@@ -670,17 +691,24 @@ function ServicesScrollStory({ sectionNum }: { sectionNum: string }) {
       pin: pinRef.current,
       pinSpacing: true,
       onUpdate: (self) => {
+        if (destroyed) return
         if (progressRef.current) progressRef.current.style.width = `${self.progress * 100}%`
         const stepIndex = Math.min(n - 1, Math.floor(self.progress * n))
         goToStep(stepIndex)
       },
     })
 
-    return () => trigger.kill()
+    return () => {
+      destroyed = true
+      trigger.kill()
+      // Clear GSAP inline styles so React can safely reclaim these DOM nodes
+      steps.forEach(el => gsap.set(el, { clearProps: 'all' }))
+      nums.forEach(el => gsap.set(el, { clearProps: 'all' }))
+    }
   }, [isDesktopStory])
 
-  if (!isDesktopStory) {
-    // Mobile fallback: simple stacked cards, no pin
+  if (isDesktopStory !== true) {
+    // Mobile fallback (also covers null = not yet detected): simple stacked cards, no pin
     return (
       <div style={{ display: 'grid', gap: 12 }}>
         {SERVICES.map((sv) => (
