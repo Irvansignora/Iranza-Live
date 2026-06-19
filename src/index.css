@@ -194,3 +194,12 @@
   font-family: 'DM Sans', sans-serif !important;
   font-size: 13px !important;
 }
+
+/* ── LandingPage — PhotoStrip scroll animation ── */
+@keyframes photoScroll {
+  from { transform: translateX(0); }
+  to   { transform: translateX(calc(-100% / 3)); }
+}
+.il-photo-scroll {
+  animation: photoScroll 30s linear infinite;
+}
