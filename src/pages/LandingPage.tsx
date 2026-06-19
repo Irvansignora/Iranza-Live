@@ -438,10 +438,9 @@ function PhotoStrip({ photos, inline = false }: { photos: HeroPhoto[], inline?: 
       maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
       WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
     }}>
-      <div style={{
+      <div className="il-photo-scroll" style={{
         display: 'flex',
         gap: 16,
-        animation: 'photoScroll 30s linear infinite',
         width: 'max-content',
         height: '100%',
         alignItems: 'center',
@@ -465,12 +464,6 @@ function PhotoStrip({ photos, inline = false }: { photos: HeroPhoto[], inline?: 
           </div>
         ))}
       </div>
-      <style>{`
-        @keyframes photoScroll {
-          from { transform: translateX(0); }
-          to { transform: translateX(calc(-100% / 3)); }
-        }
-      `}</style>
     </div>
   )
 }
@@ -794,7 +787,87 @@ export default function LandingPage() {
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
 
-  // Load settings from Supabase
+  // Inject page-level styles into <head> instead of rendering a <style> tag inside
+  // the React tree. Inline <style> nodes are a known cause of React DOM reconciliation
+  // errors on mobile (Google Translate, browser extensions, and StrictMode double-mounts
+  // all risk modifying or removing them, triggering removeChild NotFoundError crashes).
+  useEffect(() => {
+    const id = 'iranza-live-styles'
+    if (document.getElementById(id)) return // already injected
+
+    const style = document.createElement('style')
+    style.id = id
+    style.textContent = `
+      @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@300;400;500;700;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
+
+      :root {
+        --ink: #0A0A0A; --ink2: #111111; --paper: #F2EFE8;
+        --orange: #FF4D00; --purple: #7C3AED; --gold: #FFD600;
+        --muted: rgba(242,239,232,0.35); --border: rgba(242,239,232,0.07);
+      }
+      * { box-sizing: border-box; }
+      a { text-decoration: none; color: inherit; }
+      button { border: none; background: none; font-family: inherit; cursor: pointer; }
+      .cabinet { font-family: 'Cabinet Grotesk', sans-serif; }
+      .mono { font-family: 'Space Mono', monospace; }
+      .il-btn-pri { font-family: 'Cabinet Grotesk', sans-serif; font-size: 15px; font-weight: 800; letter-spacing: .02em; background: var(--orange); color: white; padding: 16px 36px; border-radius: 3px; display: inline-flex; align-items: center; gap: 10px; transition: transform .2s cubic-bezier(.23,1,.32,1), box-shadow .2s; }
+      .il-btn-pri:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 20px 56px rgba(255,77,0,.4); }
+      .il-btn-ghost { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); display: inline-flex; align-items: center; gap: 8px; transition: color .2s; }
+      .il-btn-ghost:hover { color: var(--paper); }
+      .il-nav-link { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); position: relative; transition: color .2s; }
+      .il-nav-link::after { content: ''; position: absolute; bottom: -3px; left: 0; right: 0; height: 1px; background: var(--orange); transform: scaleX(0); transform-origin: left; transition: transform .3s cubic-bezier(.23,1,.32,1); }
+      .il-nav-link:hover { color: var(--paper); }
+      .il-nav-link:hover::after { transform: scaleX(1); }
+      .il-pill { font-family: 'Space Mono', monospace; font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; background: var(--orange); color: white; padding: 11px 26px; border-radius: 100px; transition: background .25s, transform .2s; display: inline-block; }
+      .il-pill:hover { background: #e64400; transform: scale(1.03); }
+      .il-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #EF4444; animation: il-pulse 1.5s ease-in-out infinite; }
+      @keyframes il-pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
+      .il-marquee { display: flex; width: max-content; animation: il-scroll 28s linear infinite; }
+      .il-marquee.rev { animation-direction: reverse; animation-duration: 22s; }
+      @keyframes il-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+      .il-marquee-item { display: flex; align-items: center; gap: 18px; padding: 0 32px; font-family: 'Cabinet Grotesk', sans-serif; font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; flex-shrink: 0; }
+      .il-stat { transition: background .3s; }
+      .il-stat:hover { background: rgba(255,77,0,0.03); }
+      .il-price-row { display: grid; grid-template-columns: 52px 1fr 100px 110px; align-items: center; gap: 20px; padding: 20px 0; border-top: 1px solid rgba(242,239,232,0.04); position: relative; transition: background .2s; }
+      .il-price-row:hover { background: rgba(255,77,0,0.03); }
+      .il-price-row.feat::after { content: ''; position: absolute; left: -48px; right: -48px; top: 0; bottom: 0; background: rgba(255,77,0,0.05); pointer-events: none; }
+      .il-wa-fab { position: fixed; bottom: 28px; right: 28px; z-index: 800; width: 56px; height: 56px; border-radius: 50%; background: #25D366; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 32px rgba(37,211,102,0.45); transition: transform .2s, box-shadow .2s; }
+      .il-wa-fab:hover { transform: scale(1.1); box-shadow: 0 12px 40px rgba(37,211,102,.6); }
+      .il-footer-link { transition: color .2s; }
+      .il-footer-link:hover { color: var(--orange); }
+      .il-footer-link:hover .il-arr { transform: translate(2px,-2px); }
+      .il-arr { transition: transform .2s; }
+      .il-photo-card { border-radius: 8px; overflow: hidden; border: 1px solid var(--border); transition: border-color .3s, transform .4s cubic-bezier(.23,1,.32,1); cursor: pointer; }
+      .il-photo-card:hover { border-color: rgba(255,77,0,.35); transform: scale(1.02) translateY(-4px); }
+      .il-photo-card img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.23,1,.32,1); }
+      .il-photo-card:hover img { transform: scale(1.05); }
+      @media (max-width: 1024px) {
+        .il-hero-bottom { grid-template-columns: 1fr 1fr !important; }
+        .il-hero-cta { grid-column: 1/-1 !important; flex-direction: row !important; align-items: center !important; }
+        .il-about-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
+        .il-cta-grid { grid-template-columns: 1fr !important; }
+        .il-footer-grid { grid-template-columns: 1fr 1fr !important; }
+      }
+      @media (max-width: 768px) {
+        .il-hero-h1 { font-size: clamp(52px,15vw,120px) !important; }
+        .il-nav-links .il-nav-link { display: none !important; }
+        .il-hero-bottom { grid-template-columns: 1fr !important; gap: 24px !important; }
+        .il-stats-grid { grid-template-columns: 1fr !important; }
+        .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
+        .il-price-row { grid-template-columns: 44px 1fr auto !important; }
+        .il-pr-badge { display: none !important; }
+        .il-footer-grid { grid-template-columns: 1fr !important; }
+        .il-footer-bottom { flex-direction: column !important; align-items: flex-start !important; }
+        .il-photo-grid { grid-template-columns: 1fr 1fr !important; }
+      }
+    `
+    document.head.appendChild(style)
+    return () => {
+      // Clean up when component unmounts (e.g. navigating away from landing page)
+      const el = document.getElementById(id)
+      if (el) el.remove()
+    }
+  }, [])
   useEffect(() => {
     supabase.from('landing_settings').select('*').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (data?.settings) setS({ ...DEFAULT, ...data.settings }) })
@@ -852,170 +925,18 @@ export default function LandingPage() {
   const hasPhotos = s.hero_photos && s.hero_photos.length > 0
 
   return (
-    <div style={{
-      background: '#0A0A0A',
-      color: '#F2EFE8',
-      fontFamily: "'DM Sans', sans-serif",
-      fontWeight: 300,
-      overflowX: 'hidden',
-      WebkitFontSmoothing: 'antialiased',
-      cursor: isDesktop ? 'none' : 'auto',
-    }}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Cabinet+Grotesk:wght@300;400;500;700;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
-
-        :root {
-          --ink: #0A0A0A;
-          --ink2: #111111;
-          --paper: #F2EFE8;
-          --orange: #FF4D00;
-          --purple: #7C3AED;
-          --gold: #FFD600;
-          --muted: rgba(242,239,232,0.35);
-          --border: rgba(242,239,232,0.07);
-        }
-
-        * { box-sizing: border-box; }
-        a { text-decoration: none; color: inherit; }
-        button { border: none; background: none; font-family: inherit; cursor: ${isDesktop ? 'none' : 'pointer'}; }
-
-        .cabinet { font-family: 'Cabinet Grotesk', sans-serif; }
-        .mono { font-family: 'Space Mono', monospace; }
-
-        .il-btn-pri {
-          font-family: 'Cabinet Grotesk', sans-serif;
-          font-size: 15px; font-weight: 800; letter-spacing: .02em;
-          background: var(--orange); color: white;
-          padding: 16px 36px; border-radius: 3px;
-          display: inline-flex; align-items: center; gap: 10px;
-          transition: transform .2s cubic-bezier(.23,1,.32,1), box-shadow .2s;
-        }
-        .il-btn-pri:hover { transform: translateY(-3px) scale(1.01); box-shadow: 0 20px 56px rgba(255,77,0,.4); }
-
-        .il-btn-ghost {
-          font-family: 'Space Mono', monospace;
-          font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
-          color: var(--muted);
-          display: inline-flex; align-items: center; gap: 8px;
-          transition: color .2s;
-        }
-        .il-btn-ghost:hover { color: var(--paper); }
-
-        .il-nav-link {
-          font-family: 'Space Mono', monospace;
-          font-size: 11px; letter-spacing: .14em; text-transform: uppercase;
-          color: var(--muted); position: relative;
-          transition: color .2s;
-        }
-        .il-nav-link::after {
-          content: ''; position: absolute;
-          bottom: -3px; left: 0; right: 0; height: 1px;
-          background: var(--orange);
-          transform: scaleX(0); transform-origin: left;
-          transition: transform .3s cubic-bezier(.23,1,.32,1);
-        }
-        .il-nav-link:hover { color: var(--paper); }
-        .il-nav-link:hover::after { transform: scaleX(1); }
-
-        .il-pill {
-          font-family: 'Space Mono', monospace;
-          font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase;
-          background: var(--orange); color: white;
-          padding: 11px 26px; border-radius: 100px;
-          transition: background .25s, transform .2s;
-          display: inline-block;
-        }
-        .il-pill:hover { background: #e64400; transform: scale(1.03); }
-
-        .il-live-dot {
-          width: 7px; height: 7px; border-radius: 50%;
-          background: #EF4444;
-          animation: il-pulse 1.5s ease-in-out infinite;
-        }
-        @keyframes il-pulse {
-          0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); }
-          70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); }
-          100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); }
-        }
-
-        .il-marquee { display: flex; width: max-content; animation: il-scroll 28s linear infinite; }
-        .il-marquee.rev { animation-direction: reverse; animation-duration: 22s; }
-        @keyframes il-scroll { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-        .il-marquee-item {
-          display: flex; align-items: center; gap: 18px;
-          padding: 0 32px;
-          font-family: 'Cabinet Grotesk', sans-serif;
-          font-size: 15px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
-          color: var(--muted); white-space: nowrap; flex-shrink: 0;
-        }
-
-        .il-stat { transition: background .3s; }
-        .il-stat:hover { background: rgba(255,77,0,0.03); }
-
-        .il-price-row {
-          display: grid; grid-template-columns: 52px 1fr 100px 110px;
-          align-items: center; gap: 20px;
-          padding: 20px 0;
-          border-top: 1px solid rgba(242,239,232,0.04);
-          position: relative;
-          transition: background .2s;
-        }
-        .il-price-row:hover { background: rgba(255,77,0,0.03); }
-        .il-price-row.feat::after {
-          content: ''; position: absolute;
-          left: -48px; right: -48px; top: 0; bottom: 0;
-          background: rgba(255,77,0,0.05);
-          pointer-events: none;
-        }
-
-        .il-wa-fab {
-          position: fixed; bottom: 28px; right: 28px; z-index: 800;
-          width: 56px; height: 56px; border-radius: 50%;
-          background: #25D366;
-          display: flex; align-items: center; justify-content: center;
-          font-size: 24px;
-          box-shadow: 0 8px 32px rgba(37,211,102,0.45);
-          transition: transform .2s, box-shadow .2s;
-        }
-        .il-wa-fab:hover { transform: scale(1.1); box-shadow: 0 12px 40px rgba(37,211,102,.6); }
-
-        .il-footer-link { transition: color .2s; }
-        .il-footer-link:hover { color: var(--orange); }
-        .il-footer-link:hover .il-arr { transform: translate(2px,-2px); }
-        .il-arr { transition: transform .2s; }
-
-        /* Work/portfolio photo grid */
-        .il-photo-card {
-          border-radius: 8px; overflow: hidden;
-          border: 1px solid var(--border);
-          transition: border-color .3s, transform .4s cubic-bezier(.23,1,.32,1);
-          cursor: pointer;
-        }
-        .il-photo-card:hover { border-color: rgba(255,77,0,.35); transform: scale(1.02) translateY(-4px); }
-        .il-photo-card img { display: block; width: 100%; height: 100%; object-fit: cover; transition: transform .6s cubic-bezier(.23,1,.32,1); }
-        .il-photo-card:hover img { transform: scale(1.05); }
-
-        @media (max-width: 1024px) {
-          .il-hero-bottom { grid-template-columns: 1fr 1fr !important; }
-          .il-hero-cta { grid-column: 1/-1 !important; flex-direction: row !important; align-items: center !important; }
-          .il-about-grid { grid-template-columns: 1fr !important; gap: 48px !important; }
-          .il-cta-grid { grid-template-columns: 1fr !important; }
-          .il-footer-grid { grid-template-columns: 1fr 1fr !important; }
-        }
-        @media (max-width: 768px) {
-          .il-hero-h1 { font-size: clamp(52px,15vw,120px) !important; }
-          .il-nav-links .il-nav-link { display: none !important; }
-          .il-hero-bottom { grid-template-columns: 1fr !important; gap: 24px !important; }
-          .il-stats-grid { grid-template-columns: 1fr !important; }
-          .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
-          .il-price-row { grid-template-columns: 44px 1fr auto !important; }
-          .il-pr-badge { display: none !important; }
-          .il-footer-grid { grid-template-columns: 1fr !important; }
-          .il-footer-bottom { flex-direction: column !important; align-items: flex-start !important; }
-          .il-photo-grid { grid-template-columns: 1fr 1fr !important; }
-        }
-      `}</style>
-
+    <div
+      translate="no"
+      style={{
+        background: '#0A0A0A',
+        color: '#F2EFE8',
+        fontFamily: "'DM Sans', sans-serif",
+        fontWeight: 300,
+        overflowX: 'hidden',
+        WebkitFontSmoothing: 'antialiased',
+        cursor: isDesktop ? 'none' : 'auto',
+      }}
+    >
       {/* ── CUSTOM CURSOR ── */}
       {isDesktop && (
         <>
