@@ -121,60 +121,54 @@ function useGsapParallax(speed = 0.15) {
 function useReveal() {
   const [visible, setVisible] = useState<Set<string>>(new Set())
   useEffect(() => {
-    const obs = new IntersectionObserver(entries => {
+    const observed = new Set<Element>()
+
+    const io = new IntersectionObserver(entries => {
       entries.forEach(e => {
         if (e.isIntersecting && e.target instanceof HTMLElement) {
           const id = e.target.dataset.rid!
           const delay = parseFloat(e.target.dataset.rdelay || '0')
           setTimeout(() => setVisible(p => new Set([...p, id])), delay)
-          obs.unobserve(e.target)
+          io.unobserve(e.target)
+          observed.delete(e.target)
         }
       })
     }, { threshold: 0.06, rootMargin: '0px 0px -40px 0px' })
-    document.querySelectorAll('[data-rid]').forEach(el => obs.observe(el))
-    return () => obs.disconnect()
+
+    const observeNew = () => {
+      document.querySelectorAll('[data-rid]').forEach(el => {
+        if (!observed.has(el)) {
+          observed.add(el)
+          io.observe(el)
+        }
+      })
+    }
+
+    // Initial scan
+    observeNew()
+
+    // Re-scan whenever DOM changes (e.g. after Supabase data loads and
+    // conditionally-rendered elements like work-photos appear in the DOM)
+    const mo = new MutationObserver(observeNew)
+    mo.observe(document.body, { childList: true, subtree: true })
+
+    return () => { io.disconnect(); mo.disconnect() }
   }, [])
   return visible
 }
 
 /* ─── Three.js 3D Canvas ─────────────────────────────── */
-/** Cheap, synchronous check for whether this browser/device can actually
- * create a WebGL context, before we even try loading Three.js. Some
- * environments (older devices, certain browser dev tools configurations,
- * VMs without GPU passthrough, some in-app webviews) report WebGL support
- * in feature detection but still throw when a context is actually
- * requested — so this directly attempts context creation and catches it. */
-function isWebGLAvailable(): boolean {
-  try {
-    const canvas = document.createElement('canvas')
-    const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
-    return !!gl
-  } catch {
-    return false
-  }
-}
-
 function ThreeCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const [webglFailed, setWebglFailed] = useState(false)
 
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // Skip loading the (fairly heavy) Three.js script entirely if this
-    // browser/device can't render WebGL anyway — avoids the wasted
-    // download and lets us show the gradient fallback immediately.
-    if (!isWebGLAvailable()) {
-      setWebglFailed(true)
-      return
-    }
-
     // Dynamically import Three.js
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
     script.onload = () => initThree(canvas)
-    script.onerror = () => setWebglFailed(true)
     document.head.appendChild(script)
 
     return () => {
@@ -185,27 +179,15 @@ function ThreeCanvas() {
   function initThree(canvas: HTMLCanvasElement) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const THREE = (window as any).THREE
-    if (!THREE) { setWebglFailed(true); return }
-
-    let renderer: InstanceType<typeof THREE.WebGLRenderer>
-    try {
-      const W = canvas.offsetWidth
-      const H = canvas.offsetHeight
-      renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-      renderer.setSize(W, H)
-      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-      renderer.setClearColor(0x000000, 0)
-    } catch (err) {
-      // WebGLRenderer constructor throws if context creation fails (GPU
-      // blocklisted, hardware acceleration disabled, context limit hit,
-      // etc). Fall back to the gradient background instead of crashing.
-      console.warn('Iranza Live: WebGL unavailable, falling back to static hero background.', err)
-      setWebglFailed(true)
-      return
-    }
+    if (!THREE) return
 
     const W = canvas.offsetWidth
     const H = canvas.offsetHeight
+
+    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+    renderer.setSize(W, H)
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+    renderer.setClearColor(0x000000, 0)
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
@@ -328,34 +310,25 @@ function ThreeCanvas() {
 
     const animate = () => {
       animId = requestAnimationFrame(animate)
-      try {
-        const t = clock.getElapsedTime()
+      const t = clock.getElapsedTime()
 
-        // Camera subtle parallax
-        camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.03
-        camera.position.y += (mouseY * 0.3 - camera.position.y) * 0.03
-        camera.lookAt(0, 0, 0)
+      // Camera subtle parallax
+      camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.03
+      camera.position.y += (mouseY * 0.3 - camera.position.y) * 0.03
+      camera.lookAt(0, 0, 0)
 
-        // Animate objects
-        objects.forEach(o => {
-          o.mesh.rotation.x += o.rx
-          o.mesh.rotation.y += o.ry
-          o.mesh.rotation.z += o.rz
-          o.mesh.position.y = o.oy + Math.sin(t * o.floatSpeed + o.floatOffset) * o.floatAmp
-        })
+      // Animate objects
+      objects.forEach(o => {
+        o.mesh.rotation.x += o.rx
+        o.mesh.rotation.y += o.ry
+        o.mesh.rotation.z += o.rz
+        o.mesh.position.y = o.oy + Math.sin(t * o.floatSpeed + o.floatOffset) * o.floatAmp
+      })
 
-        // Pulse light
-        pointLight1.intensity = 2 + Math.sin(t * 1.5) * 0.5
+      // Pulse light
+      pointLight1.intensity = 2 + Math.sin(t * 1.5) * 0.5
 
-        renderer.render(scene, camera)
-      } catch (err) {
-        // Mid-session WebGL context loss (GPU driver reset, tab
-        // suspend/resume, etc) — stop the loop instead of throwing on
-        // every animation frame.
-        console.warn('Iranza Live: WebGL render failed, stopping hero animation.', err)
-        cancelAnimationFrame(animId)
-        setWebglFailed(true)
-      }
+      renderer.render(scene, camera)
     }
     animate()
 
@@ -385,18 +358,6 @@ function ThreeCanvas() {
     }
   }, [])
 
-  if (webglFailed) {
-    // Static gradient fallback — keeps the hero looking intentional and
-    // on-brand even on devices/browsers that can't run WebGL, instead of
-    // leaving a blank canvas or letting the render error bubble up.
-    return (
-      <div style={{
-        position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none',
-        background: 'radial-gradient(circle at 50% 55%, rgba(255,77,0,0.16) 0%, rgba(124,58,237,0.08) 35%, transparent 70%)',
-      }} />
-    )
-  }
-
   return (
     <canvas
       ref={canvasRef}
@@ -413,20 +374,26 @@ function ThreeCanvas() {
 }
 
 /* ─── Floating Photo Strip ────────────────────────────── */
-function PhotoStrip({ photos }: { photos: HeroPhoto[] }) {
+function PhotoStrip({ photos, inline = false }: { photos: HeroPhoto[], inline?: boolean }) {
   if (!photos.length) return null
 
   const items = [...photos, ...photos, ...photos] // triple for seamless loop
 
   return (
     <div style={{
-      position: 'absolute',
-      bottom: 0,
-      left: 0,
-      right: 0,
-      height: 200,
+      ...(inline ? {
+        position: 'relative',
+        width: '100%',
+        height: 220,
+      } : {
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
+        height: 200,
+        zIndex: 2,
+      }),
       overflow: 'hidden',
-      zIndex: 2,
       maskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
       WebkitMaskImage: 'linear-gradient(to right, transparent, black 10%, black 90%, transparent)',
     }}>
@@ -1075,7 +1042,7 @@ export default function LandingPage() {
       <section style={{
         minHeight: 'calc(100vh - 110px)',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        padding: hasPhotos ? '40px 48px 200px' : '40px 48px 80px',
+        padding: '40px 48px 80px',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -1139,8 +1106,7 @@ export default function LandingPage() {
           </div>
         </div>
 
-        {/* Scrolling photo strip */}
-        {hasPhotos && <PhotoStrip photos={s.hero_photos} />}
+        {/* Photo strip dihapus — foto tampil di section #Work */}
       </section>
 
       {/* ── MARQUEE 1 ── */}
@@ -1233,44 +1199,17 @@ export default function LandingPage() {
           </div>
 
           {hasPhotos ? (
-            <>
-              {/* Masonry-style photo grid */}
-              <div
-                className="il-photo-grid"
-                data-rid="work-photos"
-                style={{
-                  ...rv('work-photos', 100),
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(3, 1fr)',
-                  gap: 16,
-                }}
-              >
-                {s.hero_photos.slice(0, 6).map((photo, i) => (
-                  <div
-                    key={i}
-                    className="il-photo-card"
-                    style={{
-                      height: i === 0 || i === 5 ? 400 : 280,
-                      gridRow: i === 0 ? 'span 2' : 'span 1',
-                    }}
-                    {...addCursorTarget('hover')}
-                  >
-                    <img
-                      src={getCloudinaryThumbnail(photo.cloudinary_url, 800, 800)}
-                      alt={photo.caption || `Studio foto ${i + 1}`}
-                    />
-                  </div>
-                ))}
-              </div>
-
-              {s.hero_photos.length > 6 && (
-                <div style={{ textAlign: 'center', marginTop: 32 }}>
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.14em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-                    +{s.hero_photos.length - 6} foto lainnya
-                  </span>
-                </div>
-              )}
-            </>
+            <div
+              data-rid="work-photos"
+              style={{
+                ...rv('work-photos', 100),
+                marginLeft: 'calc(-1 * ((100vw - 1240px) / 2))',
+                marginRight: 'calc(-1 * ((100vw - 1240px) / 2))',
+                overflow: 'hidden',
+              }}
+            >
+              <PhotoStrip photos={s.hero_photos} inline />
+            </div>
           ) : (
             /* Honest fallback — no fake photos, just what we can verify in text */
             <div
@@ -1635,7 +1574,7 @@ export default function LandingPage() {
 
         <div className="il-footer-bottom" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '24px 0', flexWrap: 'wrap', gap: 16 }}>
           <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase', color: 'var(--muted)' }}>
-            © 2025 Iranza Live. Creative Agency. All rights reserved.
+            © 2026 Iranza Live. Creative Agency. All rights reserved.
           </span>
           <a href={wa('Halo Iranza Live')} target="_blank" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.1em', textTransform: 'uppercase', color: '#25D366', display: 'flex', alignItems: 'center', gap: 8 }}>
             💚 {phone}
