@@ -814,6 +814,7 @@ export default function LandingPage() {
   const cursorRingRef = useRef<HTMLDivElement>(null)
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
+  const [isMobile, setIsMobile] = useState(false)
 
   // Inject page-level styles into <head> instead of rendering a <style> tag inside
   // the React tree. Inline <style> nodes are a known cause of React DOM reconciliation
@@ -877,16 +878,19 @@ export default function LandingPage() {
         .il-footer-grid { grid-template-columns: 1fr 1fr !important; }
       }
       @media (max-width: 768px) {
-        .il-hero-h1 { font-size: clamp(52px,15vw,120px) !important; }
+        .il-hero-h1 { font-size: clamp(44px,13vw,80px) !important; }
         .il-nav-links .il-nav-link { display: none !important; }
-        .il-hero-bottom { grid-template-columns: 1fr !important; gap: 24px !important; }
+        .il-hero-bottom { grid-template-columns: 1fr !important; gap: 20px !important; }
         .il-stats-grid { grid-template-columns: 1fr !important; }
         .il-stat { border-right: none !important; border-bottom: 1px solid var(--border) !important; }
-        .il-price-row { grid-template-columns: 44px 1fr auto !important; }
+        .il-price-row { grid-template-columns: 40px 1fr auto !important; gap: 10px !important; }
         .il-pr-badge { display: none !important; }
         .il-footer-grid { grid-template-columns: 1fr !important; }
-        .il-footer-bottom { flex-direction: column !important; align-items: flex-start !important; }
+        .il-footer-bottom { flex-direction: column !important; align-items: flex-start !important; gap: 12px !important; }
         .il-photo-grid { grid-template-columns: 1fr 1fr !important; }
+        .il-btn-pri { padding: 14px 24px !important; font-size: 14px !important; width: 100%; justify-content: center; }
+        .il-wa-fab { bottom: 20px !important; right: 16px !important; width: 48px !important; height: 48px !important; font-size: 20px !important; }
+        .il-price-row .il-price-name { font-size: 15px !important; }
       }
     `
     document.head.appendChild(style)
@@ -902,7 +906,9 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
-    setIsDesktop(window.matchMedia('(min-width:769px)').matches)
+    const mq = window.matchMedia('(min-width:769px)')
+    setIsDesktop(mq.matches)
+    setIsMobile(!mq.matches)
   }, [])
 
   // Scroll handler
@@ -998,7 +1004,7 @@ export default function LandingPage() {
       {/* ── NAVBAR ── */}
       <nav style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
-        padding: scrolled ? '14px 48px' : '24px 48px',
+        padding: isMobile ? '12px 20px' : scrolled ? '14px 48px' : '24px 48px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         background: scrolled ? 'rgba(10,10,10,0.9)' : 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.3) 60%, transparent 100%)',
         backdropFilter: scrolled ? 'blur(20px)' : 'blur(2px)',
@@ -1006,7 +1012,7 @@ export default function LandingPage() {
         transition: 'padding .4s, background .4s, border-bottom .4s',
       }}>
         <div style={{ display: 'flex', alignItems: 'center' }}>
-          <BrandLogo logoUrl={s.logo_url} size={52} />
+          <BrandLogo logoUrl={s.logo_url} size={isMobile ? 36 : 52} />
         </div>
 
         <div className="il-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 36 }}>
@@ -1032,7 +1038,7 @@ export default function LandingPage() {
       <section style={{
         minHeight: 'calc(100vh - 110px)',
         display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
-        padding: '40px 48px 80px',
+        padding: isMobile ? '24px 20px 48px' : '40px 48px 80px',
         position: 'relative', overflow: 'hidden',
         borderBottom: '1px solid var(--border)',
       }}>
@@ -1060,7 +1066,7 @@ export default function LandingPage() {
           fontWeight: 900,
           fontSize: 'clamp(64px,11vw,150px)',
           lineHeight: 0.92, letterSpacing: '-0.03em',
-          color: '#F2EFE8', marginBottom: 48,
+          color: '#F2EFE8', marginBottom: isMobile ? 28 : 48,
         }}>
           {s.hero_headline_1}<br />
           <em style={{ fontStyle: 'italic', color: '#FF4D00', WebkitTextStroke: '0px', fontWeight: 900 }}>{s.hero_headline_2}</em>
@@ -1069,9 +1075,9 @@ export default function LandingPage() {
         {/* Bottom bar */}
         <div className="il-hero-bottom" style={{
           position: 'relative', zIndex: 3,
-          display: 'grid', gridTemplateColumns: '1fr 1fr 1fr',
-          gap: 32, alignItems: 'end',
-          paddingTop: 32, borderTop: '1px solid var(--border)',
+          display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr 1fr',
+          gap: isMobile ? 20 : 32, alignItems: 'end',
+          paddingTop: isMobile ? 20 : 32, borderTop: '1px solid var(--border)',
         }}>
           <p style={{ fontSize: 15, lineHeight: 1.8, color: 'var(--muted)', maxWidth: 320 }}>{s.hero_subtext}</p>
 
@@ -1086,7 +1092,7 @@ export default function LandingPage() {
             ))}
           </div>
 
-          <div className="il-hero-cta" style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 14 }}>
+          <div className="il-hero-cta" style={{ display: 'flex', flexDirection: 'column', alignItems: isMobile ? 'flex-start' : 'flex-end', gap: 14 }}>
             <a href={wa('Halo Iranza Live, saya mau booking live streaming')} className="il-btn-pri" target="_blank" {...addCursorTarget('hover')}>
               Mulai Sekarang <span>→</span>
             </a>
@@ -1111,7 +1117,7 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           SERVICES
       ══════════════════════════════════════════════ */}
-      <section id="services" ref={servicesParallax.sectionRef} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+      <section id="services" ref={servicesParallax.sectionRef} style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
         {/* Parallax decorative number — moves at a different speed than content via GSAP ScrollTrigger.
             Outer div handles static vertical centering; inner div (bgRef) is fully owned by GSAP. */}
         <div style={{ position: 'absolute', top: '50%', right: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
@@ -1126,7 +1132,7 @@ export default function LandingPage() {
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           {/* Section header */}
-          <div data-rid="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+          <div data-rid="svc-h" style={{ ...rv('svc-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>01 — Services</span>
             <div>
               <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
@@ -1161,7 +1167,7 @@ export default function LandingPage() {
           Selalu render — kalau belum ada foto, tampilkan fallback jujur
           alih-alih section kosong (supaya anchor #work selalu punya isi).
       ══════════════════════════════════════════════ */}
-      <section id="work" ref={workParallax.sectionRef} style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
+      <section id="work" ref={workParallax.sectionRef} style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', position: 'relative', overflow: 'hidden' }}>
         {/* Parallax decorative number */}
         <div style={{ position: 'absolute', top: '50%', left: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
           <div ref={workParallax.bgRef} style={{
@@ -1174,7 +1180,7 @@ export default function LandingPage() {
 
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
-          <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+          <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 64, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>02 — Work</span>
             <div>
               <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
@@ -1206,7 +1212,7 @@ export default function LandingPage() {
               data-rid="work-fallback"
               style={{
                 ...rv('work-fallback', 100),
-                display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16,
+                display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: 12,
               }}
             >
               {[
@@ -1231,17 +1237,17 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           ABOUT / STATS
       ══════════════════════════════════════════════ */}
-      <section id="about" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
+      <section id="about" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
-          <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+          <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>03 — About</span>
             <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
               Kami ada untuk <em style={{ color: '#FF4D00' }}>hasilkan penjualan</em>,<br />bukan sekadar tampil.
             </h2>
           </div>
 
-          <div className="il-about-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 80, alignItems: 'start', marginBottom: 80 }}>
+          <div className="il-about-grid" style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 32 : 80, alignItems: 'start', marginBottom: isMobile ? 36 : 80 }}>
             <div data-rid="about-1" style={rv('about-1')}>
               <p style={{
                 fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 700,
@@ -1287,7 +1293,7 @@ export default function LandingPage() {
               { icon: '📊', label: 'Laporan Tiap Sesi', sub: 'Viewers, engagement, dan hasil — kamu lihat sendiri datanya' },
             ].map((st, i) => (
               <div key={i} className="il-stat" style={{
-                padding: '44px 40px',
+                padding: isMobile ? '28px 20px' : '44px 40px',
                 borderRight: i < 2 ? '1px solid var(--border)' : 'none',
               }}>
                 <div style={{ fontSize: 32, marginBottom: 18 }}>{st.icon}</div>
@@ -1302,10 +1308,10 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           PRICING
       ══════════════════════════════════════════════ */}
-      <section id="pricing" style={{ padding: '100px 48px', borderBottom: '1px solid var(--border)' }}>
+      <section id="pricing" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 1240, margin: '0 auto' }}>
 
-          <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 72, alignItems: 'start' }}>
+          <div data-rid="price-h" style={{ ...rv('price-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>04 — Pricing</span>
             <div>
               <h2 style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontWeight: 900, fontSize: 'clamp(34px,4vw,56px)', lineHeight: 1.05, letterSpacing: '-0.02em', color: '#F2EFE8' }}>
@@ -1341,11 +1347,11 @@ export default function LandingPage() {
                 padding: '20px 0', borderTop: '1px solid var(--border)',
               }}>
                 <div style={{
-                  fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 20, fontWeight: 800,
-                  color: '#F2EFE8', display: 'flex', alignItems: 'center', gap: 12,
+                  fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: isMobile ? 17 : 20, fontWeight: 800,
+                  color: '#F2EFE8', display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 12,
                 }}>
-                  {slot.icon} {slot.label}
-                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 400 }}>
+                  <span>{slot.icon} {slot.label}</span>
+                  <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.1em', color: 'var(--muted)', fontWeight: 400 }}>
                     {slot.time}
                   </span>
                 </div>
@@ -1373,7 +1379,7 @@ export default function LandingPage() {
                     }}>{row.badge}</span>
 
                     <div style={{
-                      fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 30, fontWeight: 900,
+                      fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: isMobile ? 24 : 30, fontWeight: 900,
                       color: '#F2EFE8', letterSpacing: '-0.02em', textAlign: 'right',
                       whiteSpace: 'nowrap', position: 'relative', zIndex: 1,
                     }}>
@@ -1389,12 +1395,12 @@ export default function LandingPage() {
           {/* CTA bar */}
           <div data-rid="price-cta" style={{
             ...rv('price-cta', 200),
-            display: 'grid', gridTemplateColumns: '1fr auto',
-            alignItems: 'center', gap: 32,
-            background: '#FF4D00', padding: '30px 44px', borderRadius: 4,
+            display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr auto',
+            alignItems: 'center', gap: isMobile ? 20 : 32,
+            background: '#FF4D00', padding: isMobile ? '28px 24px' : '30px 44px', borderRadius: 4,
           }}>
             <div>
-              <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 26, fontWeight: 900, color: 'white' }}>⚡ Terbatas 4 Slot Per Hari</div>
+              <div style={{ fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: isMobile ? 20 : 26, fontWeight: 900, color: 'white' }}>⚡ Terbatas 4 Slot Per Hari</div>
               <div style={{ fontSize: 14, color: 'rgba(255,255,255,0.7)', marginTop: 4 }}>Harga promo launching — book sekarang sebelum slot penuh.</div>
             </div>
             <a
@@ -1403,7 +1409,8 @@ export default function LandingPage() {
               style={{
                 fontFamily: "'Space Mono', monospace", fontSize: 12, fontWeight: 700, letterSpacing: '.12em',
                 textTransform: 'uppercase', background: 'white', color: '#FF4D00',
-                padding: '16px 32px', borderRadius: 3, whiteSpace: 'nowrap', display: 'inline-block',
+                padding: '14px 24px', borderRadius: 3, whiteSpace: 'nowrap',
+                display: 'block', textAlign: 'center',
               }}
               {...addCursorTarget('hover')}
             >
@@ -1416,7 +1423,7 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           APA YANG KAMU DAPAT (proses kerja — jujur, tanpa testimoni fiktif)
       ══════════════════════════════════════════════ */}
-      <section id="proses" ref={prosesParallax.sectionRef} style={{ padding: '100px 48px 0', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+      <section id="proses" ref={prosesParallax.sectionRef} style={{ padding: isMobile ? '60px 20px 0' : '100px 48px 0', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
         {/* Parallax decorative number */}
         <div style={{ position: 'absolute', top: '30%', right: '4%', transform: 'translateY(-50%)', zIndex: 0 }}>
           <div ref={prosesParallax.bgRef} style={{
@@ -1427,9 +1434,9 @@ export default function LandingPage() {
           }}>05</div>
         </div>
 
-        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, paddingBottom: 100 }}>
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, paddingBottom: isMobile ? 60 : 100 }}>
 
-          <div data-rid="proses-h" style={{ ...rv('proses-h'), display: 'grid', gridTemplateColumns: '200px 1fr', gap: 40, marginBottom: 64, alignItems: 'start' }}>
+          <div data-rid="proses-h" style={{ ...rv('proses-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 64, alignItems: 'start' }}>
             <span style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8 }}>
               05 — Proses
             </span>
@@ -1468,7 +1475,7 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           FINAL CTA
       ══════════════════════════════════════════════ */}
-      <section style={{ background: '#F2EFE8', padding: '110px 48px', position: 'relative', overflow: 'hidden' }}>
+      <section style={{ background: '#F2EFE8', padding: isMobile ? '64px 20px' : '110px 48px', position: 'relative', overflow: 'hidden' }}>
         {/* Big bg text */}
         <div style={{
           position: 'absolute',
@@ -1483,7 +1490,7 @@ export default function LandingPage() {
           ...rv('cta-inner'),
           maxWidth: 1240, margin: '0 auto',
           display: 'grid', gridTemplateColumns: '1fr auto',
-          gap: 80, alignItems: 'center', position: 'relative', zIndex: 1,
+          gap: isMobile ? 36 : 80, alignItems: 'center', position: 'relative', zIndex: 1,
         }}>
           <div>
             <h2 style={{
@@ -1499,7 +1506,7 @@ export default function LandingPage() {
           </div>
           <div style={{ textAlign: 'center', flexShrink: 0 }}>
             <a href={`tel:+${s.whatsapp_number}`} style={{
-              fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: 'clamp(16px,2vw,24px)',
+              fontFamily: "'Cabinet Grotesk', sans-serif", fontSize: isMobile ? '16px' : 'clamp(16px,2vw,24px)',
               fontWeight: 800, color: '#0A0A0A', display: 'block', marginBottom: 20,
             }}>📞 {phone}</a>
             <a
@@ -1523,10 +1530,10 @@ export default function LandingPage() {
       </section>
 
       {/* ── FOOTER ── */}
-      <footer style={{ background: '#0A0A0A', padding: '0 48px', borderTop: '1px solid var(--border)' }}>
+      <footer style={{ background: '#0A0A0A', padding: isMobile ? '0 20px' : '0 48px', borderTop: '1px solid var(--border)' }}>
         <div className="il-footer-grid" style={{
           display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr',
-          gap: 40, padding: '56px 0', borderBottom: '1px solid var(--border)',
+          gap: isMobile ? 32 : 40, padding: isMobile ? '40px 0' : '56px 0', borderBottom: '1px solid var(--border)',
         }}>
           <div>
             <div style={{ marginBottom: 20 }}>
