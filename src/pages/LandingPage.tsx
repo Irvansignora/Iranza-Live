@@ -165,189 +165,230 @@ function ThreeCanvas() {
     const canvas = canvasRef.current
     if (!canvas) return
 
-    // Dynamically import Three.js
+    // Feature-detect WebGL before even bothering to fetch three.js. Some
+    // mobile browsers (older devices, low-power mode, certain in-app
+    // webviews) don't support it — in that case we just leave the
+    // canvas empty and let the rest of the hero (headline, CTA, etc.)
+    // render normally instead of silently failing later.
+    const supportsWebGL = (() => {
+      try {
+        const test = document.createElement('canvas')
+        return !!(test.getContext('webgl') || test.getContext('experimental-webgl'))
+      } catch {
+        return false
+      }
+    })()
+    if (!supportsWebGL) return
+
+    // Reuse an already-loaded three.js (e.g. from a previous mount)
+    // instead of injecting a duplicate <script> tag every time.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).THREE) {
+      initThree(canvas)
+      return
+    }
+
     const script = document.createElement('script')
     script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'
     script.onload = () => initThree(canvas)
+    script.onerror = () => {
+      // CDN unreachable / blocked / slow network on mobile data — fail
+      // quietly. The hero still works fine without the 3D decoration.
+      console.warn('[ThreeCanvas] Failed to load three.js from CDN — hero will render without 3D.')
+    }
     document.head.appendChild(script)
 
     return () => {
-      document.head.removeChild(script)
+      // Guard removeChild: in React 18 StrictMode (dev only) effects can
+      // run twice, and the script may have already been removed/loaded
+      // by the time cleanup runs.
+      if (script.parentNode) document.head.removeChild(script)
     }
   }, [])
 
   function initThree(canvas: HTMLCanvasElement) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const THREE = (window as any).THREE
-    if (!THREE) return
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const THREE = (window as any).THREE
+      if (!THREE) return
 
-    const W = canvas.offsetWidth
-    const H = canvas.offsetHeight
+      const W = canvas.offsetWidth
+      const H = canvas.offsetHeight
+      // If the section hasn't been laid out yet (0 size), bail instead
+      // of dividing by zero in the camera aspect ratio below — retry
+      // on the next animation frame.
+      if (!W || !H) {
+        requestAnimationFrame(() => initThree(canvas))
+        return
+      }
 
-    const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
-    renderer.setSize(W, H)
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.setClearColor(0x000000, 0)
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true })
+      renderer.setSize(W, H)
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+      renderer.setClearColor(0x000000, 0)
 
-    const scene = new THREE.Scene()
-    const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
-    camera.position.set(0, 0, 6)
+      const scene = new THREE.Scene()
+      const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100)
+      camera.position.set(0, 0, 6)
 
-    // Lights
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
-    scene.add(ambientLight)
+      // Lights
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.3)
+      scene.add(ambientLight)
 
-    const pointLight1 = new THREE.PointLight(0xFF4D00, 2.5, 20)
-    pointLight1.position.set(3, 3, 3)
-    scene.add(pointLight1)
+      const pointLight1 = new THREE.PointLight(0xFF4D00, 2.5, 20)
+      pointLight1.position.set(3, 3, 3)
+      scene.add(pointLight1)
 
-    const pointLight2 = new THREE.PointLight(0x7C3AED, 1.5, 20)
-    pointLight2.position.set(-3, -2, 2)
-    scene.add(pointLight2)
+      const pointLight2 = new THREE.PointLight(0x7C3AED, 1.5, 20)
+      pointLight2.position.set(-3, -2, 2)
+      scene.add(pointLight2)
 
-    const pointLight3 = new THREE.PointLight(0xFFD600, 1, 15)
-    pointLight3.position.set(0, -3, 1)
-    scene.add(pointLight3)
+      const pointLight3 = new THREE.PointLight(0xFFD600, 1, 15)
+      pointLight3.position.set(0, -3, 1)
+      scene.add(pointLight3)
 
-    // Materials
-    const matOrange = new THREE.MeshStandardMaterial({
-      color: 0xFF4D00,
-      metalness: 0.7,
-      roughness: 0.2,
-      emissive: 0xFF4D00,
-      emissiveIntensity: 0.1,
-    })
-    const matPurple = new THREE.MeshStandardMaterial({
-      color: 0x7C3AED,
-      metalness: 0.8,
-      roughness: 0.15,
-      emissive: 0x7C3AED,
-      emissiveIntensity: 0.1,
-    })
-    const matGold = new THREE.MeshStandardMaterial({
-      color: 0xFFD600,
-      metalness: 0.9,
-      roughness: 0.1,
-      emissive: 0xFFD600,
-      emissiveIntensity: 0.08,
-    })
-    const matWire = new THREE.MeshBasicMaterial({
-      color: 0xFF4D00,
-      wireframe: true,
-      transparent: true,
-      opacity: 0.15,
-    })
-
-    // Objects
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const objects: Array<{
-      mesh: any
-      rx: number; ry: number; rz: number
-      ox: number; oy: number
-      floatSpeed: number; floatAmp: number; floatOffset: number
-    }> = []
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const addObj = (geo: any, mat: any, x: number, y: number, z: number) => {
-      const mesh = new THREE.Mesh(geo, mat)
-      mesh.position.set(x, y, z)
-      scene.add(mesh)
-      objects.push({
-        mesh,
-        rx: (Math.random() - 0.5) * 0.01,
-        ry: (Math.random() - 0.5) * 0.015,
-        rz: (Math.random() - 0.5) * 0.008,
-        ox: x, oy: y,
-        floatSpeed: 0.4 + Math.random() * 0.6,
-        floatAmp: 0.08 + Math.random() * 0.12,
-        floatOffset: Math.random() * Math.PI * 2,
+      // Materials
+      const matOrange = new THREE.MeshStandardMaterial({
+        color: 0xFF4D00,
+        metalness: 0.7,
+        roughness: 0.2,
+        emissive: 0xFF4D00,
+        emissiveIntensity: 0.1,
       })
-      return mesh
-    }
-
-    // Main torus knot — centerpiece
-    addObj(new THREE.TorusKnotGeometry(0.9, 0.28, 120, 16, 2, 3), matOrange, 0, 0.3, 0)
-
-    // Floating icosahedron
-    addObj(new THREE.IcosahedronGeometry(0.5, 1), matPurple, -2.8, 1.2, -1)
-
-    // Floating octahedron
-    addObj(new THREE.OctahedronGeometry(0.4, 0), matGold, 2.6, -0.8, -0.5)
-
-    // Wireframe sphere — background
-    addObj(new THREE.SphereGeometry(1.8, 16, 16), matWire, 0, 0, -2)
-
-    // Small dodecahedrons
-    addObj(new THREE.DodecahedronGeometry(0.22, 0), matOrange, 1.8, 1.8, 0.5)
-    addObj(new THREE.DodecahedronGeometry(0.18, 0), matPurple, -1.6, -1.8, 0.2)
-    addObj(new THREE.DodecahedronGeometry(0.15, 0), matGold, -2.4, 0.3, 0.8)
-
-    // Particle system
-    const particleCount = 120
-    const positions = new Float32Array(particleCount * 3)
-    for (let i = 0; i < particleCount; i++) {
-      positions[i * 3] = (Math.random() - 0.5) * 12
-      positions[i * 3 + 1] = (Math.random() - 0.5) * 8
-      positions[i * 3 + 2] = (Math.random() - 0.5) * 6
-    }
-    const particleGeo = new THREE.BufferGeometry()
-    particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
-    const particleMat = new THREE.PointsMaterial({
-      color: 0xFF4D00, size: 0.03, transparent: true, opacity: 0.6,
-    })
-    scene.add(new THREE.Points(particleGeo, particleMat))
-
-    // Mouse tracking
-    let mouseX = 0, mouseY = 0
-    const onMouseMove = (e: MouseEvent) => {
-      mouseX = (e.clientX / window.innerWidth - 0.5) * 2
-      mouseY = -(e.clientY / window.innerHeight - 0.5) * 2
-    }
-    window.addEventListener('mousemove', onMouseMove)
-
-    let animId: number
-    const clock = new THREE.Clock()
-
-    const animate = () => {
-      animId = requestAnimationFrame(animate)
-      const t = clock.getElapsedTime()
-
-      // Camera subtle parallax
-      camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.03
-      camera.position.y += (mouseY * 0.3 - camera.position.y) * 0.03
-      camera.lookAt(0, 0, 0)
-
-      // Animate objects
-      objects.forEach(o => {
-        o.mesh.rotation.x += o.rx
-        o.mesh.rotation.y += o.ry
-        o.mesh.rotation.z += o.rz
-        o.mesh.position.y = o.oy + Math.sin(t * o.floatSpeed + o.floatOffset) * o.floatAmp
+      const matPurple = new THREE.MeshStandardMaterial({
+        color: 0x7C3AED,
+        metalness: 0.8,
+        roughness: 0.15,
+        emissive: 0x7C3AED,
+        emissiveIntensity: 0.1,
+      })
+      const matGold = new THREE.MeshStandardMaterial({
+        color: 0xFFD600,
+        metalness: 0.9,
+        roughness: 0.1,
+        emissive: 0xFFD600,
+        emissiveIntensity: 0.08,
+      })
+      const matWire = new THREE.MeshBasicMaterial({
+        color: 0xFF4D00,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.15,
       })
 
-      // Pulse light
-      pointLight1.intensity = 2 + Math.sin(t * 1.5) * 0.5
+      // Objects
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const objects: Array<{
+        mesh: any
+        rx: number; ry: number; rz: number
+        ox: number; oy: number
+        floatSpeed: number; floatAmp: number; floatOffset: number
+      }> = []
 
-      renderer.render(scene, camera)
-    }
-    animate()
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const addObj = (geo: any, mat: any, x: number, y: number, z: number) => {
+        const mesh = new THREE.Mesh(geo, mat)
+        mesh.position.set(x, y, z)
+        scene.add(mesh)
+        objects.push({
+          mesh,
+          rx: (Math.random() - 0.5) * 0.01,
+          ry: (Math.random() - 0.5) * 0.015,
+          rz: (Math.random() - 0.5) * 0.008,
+          ox: x, oy: y,
+          floatSpeed: 0.4 + Math.random() * 0.6,
+          floatAmp: 0.08 + Math.random() * 0.12,
+          floatOffset: Math.random() * Math.PI * 2,
+        })
+        return mesh
+      }
 
-    // Resize handler
-    const onResize = () => {
-      const W2 = canvas.offsetWidth
-      const H2 = canvas.offsetHeight
-      camera.aspect = W2 / H2
-      camera.updateProjectionMatrix()
-      renderer.setSize(W2, H2)
-    }
-    window.addEventListener('resize', onResize)
+      // Main torus knot — centerpiece
+      addObj(new THREE.TorusKnotGeometry(0.9, 0.28, 120, 16, 2, 3), matOrange, 0, 0.3, 0)
 
-    // Cleanup stored on canvas element
-    ;(canvas as HTMLCanvasElement & { _threeCleanup?: () => void })._threeCleanup = () => {
-      cancelAnimationFrame(animId)
-      window.removeEventListener('mousemove', onMouseMove)
-      window.removeEventListener('resize', onResize)
-      renderer.dispose()
+      // Floating icosahedron
+      addObj(new THREE.IcosahedronGeometry(0.5, 1), matPurple, -2.8, 1.2, -1)
+
+      // Floating octahedron
+      addObj(new THREE.OctahedronGeometry(0.4, 0), matGold, 2.6, -0.8, -0.5)
+
+      // Wireframe sphere — background
+      addObj(new THREE.SphereGeometry(1.8, 16, 16), matWire, 0, 0, -2)
+
+      // Small dodecahedrons
+      addObj(new THREE.DodecahedronGeometry(0.22, 0), matOrange, 1.8, 1.8, 0.5)
+      addObj(new THREE.DodecahedronGeometry(0.18, 0), matPurple, -1.6, -1.8, 0.2)
+      addObj(new THREE.DodecahedronGeometry(0.15, 0), matGold, -2.4, 0.3, 0.8)
+
+      // Particle system
+      const particleCount = 120
+      const positions = new Float32Array(particleCount * 3)
+      for (let i = 0; i < particleCount; i++) {
+        positions[i * 3] = (Math.random() - 0.5) * 12
+        positions[i * 3 + 1] = (Math.random() - 0.5) * 8
+        positions[i * 3 + 2] = (Math.random() - 0.5) * 6
+      }
+      const particleGeo = new THREE.BufferGeometry()
+      particleGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+      const particleMat = new THREE.PointsMaterial({
+        color: 0xFF4D00, size: 0.03, transparent: true, opacity: 0.6,
+      })
+      scene.add(new THREE.Points(particleGeo, particleMat))
+
+      // Mouse tracking
+      let mouseX = 0, mouseY = 0
+      const onMouseMove = (e: MouseEvent) => {
+        mouseX = (e.clientX / window.innerWidth - 0.5) * 2
+        mouseY = -(e.clientY / window.innerHeight - 0.5) * 2
+      }
+      window.addEventListener('mousemove', onMouseMove)
+
+      let animId: number
+      const clock = new THREE.Clock()
+
+      const animate = () => {
+        animId = requestAnimationFrame(animate)
+        const t = clock.getElapsedTime()
+
+        // Camera subtle parallax
+        camera.position.x += (mouseX * 0.5 - camera.position.x) * 0.03
+        camera.position.y += (mouseY * 0.3 - camera.position.y) * 0.03
+        camera.lookAt(0, 0, 0)
+
+        // Animate objects
+        objects.forEach(o => {
+          o.mesh.rotation.x += o.rx
+          o.mesh.rotation.y += o.ry
+          o.mesh.rotation.z += o.rz
+          o.mesh.position.y = o.oy + Math.sin(t * o.floatSpeed + o.floatOffset) * o.floatAmp
+        })
+
+        // Pulse light
+        pointLight1.intensity = 2 + Math.sin(t * 1.5) * 0.5
+
+        renderer.render(scene, camera)
+      }
+      animate()
+
+      // Resize handler
+      const onResize = () => {
+        const W2 = canvas.offsetWidth
+        const H2 = canvas.offsetHeight
+        camera.aspect = W2 / H2
+        camera.updateProjectionMatrix()
+        renderer.setSize(W2, H2)
+      }
+      window.addEventListener('resize', onResize)
+
+      // Cleanup stored on canvas element
+      ;(canvas as HTMLCanvasElement & { _threeCleanup?: () => void })._threeCleanup = () => {
+        cancelAnimationFrame(animId)
+        window.removeEventListener('mousemove', onMouseMove)
+        window.removeEventListener('resize', onResize)
+        renderer.dispose()
+      }
+    } catch (err) {
+      console.warn('[ThreeCanvas] Failed to initialize 3D scene — hero will render without it.', err)
     }
   }
 
