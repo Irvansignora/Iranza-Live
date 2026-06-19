@@ -499,6 +499,14 @@ function BrandLogo({ logoUrl, size = 32 }: { logoUrl: string; size?: number }) {
   )
 }
 
+function NavIcon({ d, size = 14 }: { d: string; size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+      <path d={d} />
+    </svg>
+  )
+}
+
 /* ─── Apa yang Kamu Dapat — pinned GSAP scroll-story ──── */
 const PROSES_STEPS = [
   { step: '01', icon: '📞', title: 'Konsultasi', desc: 'Cerita soal produk & target kamu lewat WhatsApp. Kami bantu tentukan platform dan slot yang paling cocok.' },
@@ -815,11 +823,19 @@ export default function LandingPage() {
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
-  const navLinks: [string, string][] = [['#services', 'Services'], ['#work', 'Work'], ['#pricing', 'Pricing'], ['#proses', 'Proses']]
+  const navLinks: { href: string; label: string; icon: string }[] = [
+    { href: '#services', label: 'Services', icon: 'M13 2 3 14h7l-1 8 11-13h-7l1-7z' },
+    { href: '#work', label: 'Work', icon: 'M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1ZM9 5h6v2H9Z' },
+    { href: '#pricing', label: 'Pricing', icon: 'M20.59 13.41 11 23l-9-9V4a2 2 0 0 1 2-2h9.41a2 2 0 0 1 1.41.59l7 7a2 2 0 0 1 0 2.82ZM7 7h.01' },
+    { href: '#proses', label: 'Proses', icon: 'M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13' },
+  ]
   const navCapsuleRef = useRef<HTMLDivElement>(null)
   const navLinkRefs = useRef<Record<string, HTMLAnchorElement | null>>({})
   const [activeSection, setActiveSection] = useState('')
   const [highlight, setHighlight] = useState({ left: 0, width: 0, opacity: 0 })
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const mobilePanelRef = useRef<HTMLDivElement>(null)
+  const mobileBtnRef = useRef<HTMLButtonElement>(null)
 
   // Inject page-level styles into <head> instead of rendering a <style> tag inside
   // the React tree. Inline <style> nodes are a known cause of React DOM reconciliation
@@ -856,14 +872,21 @@ export default function LandingPage() {
       .il-pill:hover { background: #e64400; transform: scale(1.03); }
       .il-pill.scrolled { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); animation: il-pill-glow 3s ease-in-out infinite; }
       @keyframes il-pill-glow { 0%,100% { box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.25); } 50% { box-shadow: 0 0 0 1px rgba(255,77,0,.6), 0 4px 32px rgba(255,77,0,.5); } }
-      .il-logo-badge { display: flex; align-items: center; border-radius: 100px; border: 1px solid transparent; transition: background .45s cubic-bezier(.23,1,.32,1), border-color .45s, padding .45s cubic-bezier(.23,1,.32,1), box-shadow .45s; }
-      .il-logo-badge.scrolled { background: rgba(17,17,17,0.72); border-color: var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); padding: 6px 16px 6px 6px; box-shadow: 0 8px 28px rgba(0,0,0,.35); }
-      .il-nav-capsule { display: flex; align-items: center; gap: 2px; padding: 6px; border-radius: 100px; position: relative; background: transparent; border: 1px solid transparent; transition: background .45s cubic-bezier(.23,1,.32,1), border-color .45s, box-shadow .45s, padding .45s; }
-      .il-nav-capsule.scrolled { background: rgba(17,17,17,0.72); border-color: var(--border); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); box-shadow: 0 8px 28px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,77,0,.04); }
-      .il-nav-highlight { position: absolute; top: 6px; bottom: 6px; left: 0; width: 0; border-radius: 100px; background: linear-gradient(135deg, rgba(255,77,0,.22), rgba(255,77,0,.06)); border: 1px solid rgba(255,77,0,.35); box-shadow: 0 0 18px rgba(255,77,0,.3); opacity: 0; pointer-events: none; transition: left .5s cubic-bezier(.23,1,.32,1), width .5s cubic-bezier(.23,1,.32,1), opacity .35s; }
-      .il-nav-link-pill { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); padding: 9px 18px; border-radius: 100px; position: relative; z-index: 1; white-space: nowrap; transition: color .25s; }
-      .il-nav-link-pill:hover { color: var(--paper); }
+      .il-header-bar { transition: background .4s, backdrop-filter .4s, border-color .4s, padding .45s cubic-bezier(.23,1,.32,1); border-bottom: 1px solid transparent; }
+      .il-header-bar.scrolled { background: rgba(10,10,10,.82); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border-bottom-color: var(--border); }
+      .il-nav-capsule { display: flex; align-items: center; gap: 2px; position: relative; }
+      .il-nav-highlight { position: absolute; top: 0; bottom: 0; left: 0; width: 0; border-radius: 100px; background: linear-gradient(135deg, rgba(255,77,0,.2), rgba(255,77,0,.06)); border: 1px solid rgba(255,77,0,.32); box-shadow: 0 0 16px rgba(255,77,0,.28); opacity: 0; pointer-events: none; transition: left .5s cubic-bezier(.23,1,.32,1), width .5s cubic-bezier(.23,1,.32,1), opacity .35s; }
+      .il-nav-link-pill { font-family: 'Space Mono', monospace; font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); padding: 9px 16px; border-radius: 100px; position: relative; z-index: 1; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color .25s, background .25s; }
+      .il-nav-link-pill:hover { color: var(--paper); background: rgba(242,239,232,.05); }
       .il-nav-link-pill.active { color: var(--paper); }
+      .il-mobile-menu-btn { display: flex; align-items: center; justify-content: center; width: 38px; height: 38px; border-radius: 100px; border: 1px solid var(--border); background: rgba(242,239,232,.04); color: var(--paper); transition: background .25s, border-color .25s; }
+      .il-mobile-menu-btn:active { background: rgba(255,77,0,.12); border-color: rgba(255,77,0,.3); }
+      .il-mobile-panel { position: fixed; left: 12px; right: 12px; z-index: 499; border-radius: 18px; background: rgba(14,14,14,.92); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); border: 1px solid var(--border); box-shadow: 0 20px 60px rgba(0,0,0,.5); overflow: hidden; animation: il-panel-in .3s cubic-bezier(.23,1,.32,1); }
+      @keyframes il-panel-in { from { opacity: 0; transform: translateY(-10px) scale(.98); } to { opacity: 1; transform: translateY(0) scale(1); } }
+      .il-mobile-link { display: flex; align-items: center; gap: 12px; padding: 16px 20px; font-family: 'Space Mono', monospace; font-size: 13px; letter-spacing: .1em; text-transform: uppercase; color: var(--paper); border-bottom: 1px solid var(--border); transition: background .2s, padding-left .2s; }
+      .il-mobile-link:last-child { border-bottom: none; }
+      .il-mobile-link:active { background: rgba(255,77,0,.08); padding-left: 26px; }
+      .il-mobile-link svg { color: var(--orange); flex-shrink: 0; }
       .il-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #EF4444; animation: il-pulse 1.5s ease-in-out infinite; }
       @keyframes il-pulse { 0% { box-shadow: 0 0 0 0 rgba(239,68,68,.7); } 70% { box-shadow: 0 0 0 10px rgba(239,68,68,0); } 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0); } }
       .il-marquee { display: flex; width: max-content; animation: il-scroll 28s linear infinite; }
@@ -928,9 +951,10 @@ export default function LandingPage() {
 
   // Scroll handler — tracks header shrink state + which section is active
   useEffect(() => {
-    const sectionIds = navLinks.map(([href]) => href.slice(1))
+    const sectionIds = navLinks.map((n) => n.href.slice(1))
     const onScroll = () => {
       setScrolled(window.scrollY > 60)
+      setMobileMenuOpen(false)
       let current = ''
       for (const id of sectionIds) {
         const el = document.getElementById(id)
@@ -946,8 +970,21 @@ export default function LandingPage() {
     return () => window.removeEventListener('scroll', onScroll)
   }, [])
 
+  // Close mobile menu on outside tap
+  useEffect(() => {
+    if (!mobileMenuOpen) return
+    const onTap = (e: MouseEvent) => {
+      if (mobilePanelRef.current?.contains(e.target as Node)) return
+      if (mobileBtnRef.current?.contains(e.target as Node)) return
+      setMobileMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onTap)
+    return () => document.removeEventListener('mousedown', onTap)
+  }, [mobileMenuOpen])
+
   // Slide the highlight pill under whichever nav link is currently active
   useEffect(() => {
+    if (isMobile) return
     const key = activeSection ? `#${activeSection}` : ''
     const el = key ? navLinkRefs.current[key] : null
     const container = navCapsuleRef.current
@@ -1044,45 +1081,72 @@ export default function LandingPage() {
       <a href={wa('Halo Iranza Live')} className="il-wa-fab" target="_blank" rel="noopener" {...addCursorTarget('hover')}>💬</a>
 
       {/* ── NAVBAR ── */}
-      <nav style={{
+      <nav className={`il-header-bar${scrolled ? ' scrolled' : ''}`} style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 500,
-        padding: isMobile ? '12px 20px' : scrolled ? '16px 32px' : '24px 48px',
+        padding: isMobile ? '12px 16px' : scrolled ? '12px 32px' : '20px 48px',
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        background: scrolled ? 'transparent' : 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.3) 60%, transparent 100%)',
-        transition: 'padding .45s cubic-bezier(.23,1,.32,1), background .4s',
+        background: scrolled ? undefined : 'linear-gradient(to bottom, rgba(10,10,10,0.7) 0%, rgba(10,10,10,0.3) 60%, transparent 100%)',
       }}>
-        <div className={`il-logo-badge${scrolled ? ' scrolled' : ''}`}>
-          <BrandLogo logoUrl={s.logo_url} size={isMobile ? 36 : scrolled ? 38 : 52} />
+        <div style={{ display: 'flex', alignItems: 'center' }}>
+          <BrandLogo logoUrl={s.logo_url} size={isMobile ? 34 : scrolled ? 38 : 52} />
         </div>
 
-        <div
-          ref={navCapsuleRef}
-          className={`il-nav-capsule${scrolled ? ' scrolled' : ''}`}
-          style={{ display: isMobile ? 'none' : 'flex' }}
-        >
-          <div className="il-nav-highlight" style={{ left: highlight.left, width: highlight.width, opacity: highlight.opacity }} />
-          {navLinks.map(([href, label]) => (
-            <a
-              key={href}
-              href={href}
-              ref={(el) => { navLinkRefs.current[href] = el }}
-              className={`il-nav-link-pill${activeSection === href.slice(1) ? ' active' : ''}`}
-              {...addCursorTarget('hover')}
+        {!isMobile && (
+          <div ref={navCapsuleRef} className="il-nav-capsule">
+            <div className="il-nav-highlight" style={{ left: highlight.left, width: highlight.width, opacity: highlight.opacity }} />
+            {navLinks.map(({ href, label, icon }) => (
+              <a
+                key={href}
+                href={href}
+                ref={(el) => { navLinkRefs.current[href] = el }}
+                className={`il-nav-link-pill${activeSection === href.slice(1) ? ' active' : ''}`}
+                {...addCursorTarget('hover')}
+              >
+                <NavIcon d={icon} />
+                {label}
+              </a>
+            ))}
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <a
+            href={wa('Halo Iranza Live, mau booking')}
+            className={`il-pill${scrolled ? ' scrolled' : ''}`}
+            target="_blank"
+            {...addCursorTarget('hover')}
+          >
+            Book Now
+          </a>
+          {isMobile && (
+            <button
+              ref={mobileBtnRef}
+              type="button"
+              aria-label="Menu"
+              aria-expanded={mobileMenuOpen}
+              className="il-mobile-menu-btn"
+              onClick={() => setMobileMenuOpen((v) => !v)}
             >
+              {mobileMenuOpen
+                ? <NavIcon d="M18 6 6 18M6 6l12 12" size={18} />
+                : <NavIcon d="M3 6h18M3 12h18M3 18h18" size={18} />}
+            </button>
+          )}
+        </div>
+      </nav>
+
+      {/* ── MOBILE MENU PANEL ── */}
+      {isMobile && mobileMenuOpen && (
+        <div ref={mobilePanelRef} className="il-mobile-panel" style={{ top: 64 }}>
+          {navLinks.map(({ href, label, icon }) => (
+            <a key={href} href={href} className="il-mobile-link" onClick={() => setMobileMenuOpen(false)}>
+              <NavIcon d={icon} size={16} />
               {label}
             </a>
           ))}
         </div>
+      )}
 
-        <a
-          href={wa('Halo Iranza Live, mau booking')}
-          className={`il-pill${scrolled ? ' scrolled' : ''}`}
-          target="_blank"
-          {...addCursorTarget('hover')}
-        >
-          Book Now
-        </a>
-      </nav>
 
 
       {/* Explicit spacer reserving room for the fixed navbar above — this
