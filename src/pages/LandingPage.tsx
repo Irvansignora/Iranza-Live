@@ -1244,6 +1244,7 @@ export default function LandingPage() {
   // Vite serves it from the root). Loads lazily on first click since browsers
   // block audio playback until a real user gesture happens.
   const [soundOn, setSoundOn] = useState(false)
+  const [soundError, setSoundError] = useState(false)
   const audioElRef = useRef<HTMLAudioElement>(null)
   const fadeFrameRef = useRef<number | null>(null)
   const navLinks: { href: string; label: string; icon: string }[] = [
@@ -1328,6 +1329,8 @@ export default function LandingPage() {
       .il-sound-fab { position: fixed; bottom: 28px; left: 28px; z-index: 800; width: 52px; height: 52px; border-radius: 50%; background: rgba(20,20,20,.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); color: rgba(242,239,232,0.7); display: flex; align-items: center; justify-content: center; transition: transform .2s, box-shadow .25s, border-color .25s, color .25s; }
       .il-sound-fab:hover { transform: scale(1.1); color: #F2EFE8; border-color: rgba(255,77,0,.35); }
       .il-sound-fab.active { color: #FF4D00; box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.3); animation: il-pill-glow 3s ease-in-out infinite; }
+      .il-sound-fab.error { animation: il-shake .5s ease; border-color: rgba(255,60,60,.6); color: #FF6B6B; }
+      @keyframes il-shake { 10%, 90% { transform: translateX(-1px); } 20%, 80% { transform: translateX(2px); } 30%, 50%, 70% { transform: translateX(-4px); } 40%, 60% { transform: translateX(4px); } }
       .il-footer-link { transition: color .2s; }
       .il-footer-link:hover { color: var(--orange); }
       .il-footer-link:hover .il-arr { transform: translate(2px,-2px); }
@@ -1493,7 +1496,13 @@ export default function LandingPage() {
         setSoundOn(true)
       })
       .catch(err => {
-        console.warn('[Ambient sound] Could not play /ambient.mp3 — make sure the file exists at public/ambient.mp3.', err)
+        // Most common cause: public/ambient.mp3 doesn't exist yet (404) or
+        // hasn't been redeployed. Give a visible nudge instead of failing
+        // silently, since a 404 here previously looked like "the button
+        // doesn't work".
+        console.warn('[Ambient sound] Could not play /ambient.mp3 — make sure the file exists at public/ambient.mp3 and has been deployed.', err)
+        setSoundError(true)
+        window.setTimeout(() => setSoundError(false), 700)
       })
   }, [soundOn])
 
@@ -1598,7 +1607,7 @@ export default function LandingPage() {
         aria-label={soundOn ? 'Matikan musik ambient' : 'Nyalakan musik ambient'}
         aria-pressed={soundOn}
         onClick={toggleAmbient}
-        className={`il-sound-fab${soundOn ? ' active' : ''}`}
+        className={`il-sound-fab${soundOn ? ' active' : ''}${soundError ? ' error' : ''}`}
         {...addCursorTarget('hover')}
       >
         <NavIcon d={soundOn ? VOLUME_ON_PATH : VOLUME_OFF_PATH} size={18} />
