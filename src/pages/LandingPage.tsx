@@ -60,6 +60,10 @@ const DEFAULT: LandingSettings = {
 const MARQUEE_1 = ['Live Shopee', 'TikTok Shop', 'Dual Platform', 'Host Pro', 'Studio HD', '4 Slot/Hari', 'Mulai 60rb']
 const MARQUEE_2 = ['Live Profesional', 'Hasil Maksimal', 'Slot Pagi & Malam', 'Promo Launching!', 'Booking Now']
 
+// Speaker icon paths (lucide-style, 24x24 viewBox) for the ambient sound toggle.
+const VOLUME_ON_PATH = 'M11 5 6 9H2v6h4l5 4zM15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14'
+const VOLUME_OFF_PATH = 'M11 5 6 9H2v6h4l5 4zM22 9l-6 6M16 9l6 6'
+
 const SERVICES = [
   {
     id: 'shopee',
@@ -1231,9 +1235,18 @@ export default function LandingPage() {
   const prosesParallax = useGsapParallax(0.18)
   const cursorRef = useRef<HTMLDivElement>(null)
   const cursorRingRef = useRef<HTMLDivElement>(null)
+  const cursorGlowRef = useRef<HTMLDivElement>(null)
   const [cursorType, setCursorType] = useState<'default' | 'hover' | 'drag'>('default')
   const [isDesktop, setIsDesktop] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
+
+  // Ambient background sound — synthesized in-browser with the Web Audio API
+  // (no audio file to host/load). Created lazily, on the user's first click,
+  // since browsers block audio with sound until a real user gesture happens.
+  const [soundOn, setSoundOn] = useState(false)
+  const audioCtxRef = useRef<AudioContext | null>(null)
+  const masterGainRef = useRef<GainNode | null>(null)
+  const ambientStopRef = useRef<(() => void) | null>(null)
   const navLinks: { href: string; label: string; icon: string }[] = [
     { href: '#services', label: 'Services', icon: 'M13 2 3 14h7l-1 8 11-13h-7l1-7z' },
     { href: '#work', label: 'Work', icon: 'M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1ZM9 5h6v2H9Z' },
@@ -1312,6 +1325,9 @@ export default function LandingPage() {
       .il-price-row.feat::after { content: ''; position: absolute; left: -48px; right: -48px; top: 0; bottom: 0; background: rgba(255,77,0,0.05); pointer-events: none; }
       .il-wa-fab { position: fixed; bottom: 28px; right: 28px; z-index: 800; width: 56px; height: 56px; border-radius: 50%; background: #25D366; display: flex; align-items: center; justify-content: center; font-size: 24px; box-shadow: 0 8px 32px rgba(37,211,102,0.45); transition: transform .2s, box-shadow .2s; }
       .il-wa-fab:hover { transform: scale(1.1); box-shadow: 0 12px 40px rgba(37,211,102,.6); }
+      .il-sound-fab { position: fixed; bottom: 28px; left: 28px; z-index: 800; width: 52px; height: 52px; border-radius: 50%; background: rgba(20,20,20,.7); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 1px solid var(--border); color: rgba(242,239,232,0.7); display: flex; align-items: center; justify-content: center; transition: transform .2s, box-shadow .25s, border-color .25s, color .25s; }
+      .il-sound-fab:hover { transform: scale(1.1); color: #F2EFE8; border-color: rgba(255,77,0,.35); }
+      .il-sound-fab.active { color: #FF4D00; box-shadow: 0 0 0 1px rgba(255,77,0,.4), 0 4px 24px rgba(255,77,0,.3); animation: il-pill-glow 3s ease-in-out infinite; }
       .il-footer-link { transition: color .2s; }
       .il-footer-link:hover { color: var(--orange); }
       .il-footer-link:hover .il-arr { transform: translate(2px,-2px); }
@@ -1340,6 +1356,7 @@ export default function LandingPage() {
         .il-photo-grid { grid-template-columns: 1fr 1fr !important; }
         .il-btn-pri { padding: 14px 24px !important; font-size: 14px !important; width: 100%; justify-content: center; }
         .il-wa-fab { bottom: 20px !important; right: 16px !important; width: 48px !important; height: 48px !important; font-size: 20px !important; }
+        .il-sound-fab { bottom: 20px !important; left: 16px !important; width: 44px !important; height: 44px !important; }
         .il-price-row .il-price-name { font-size: 15px !important; }
       }
     `
@@ -1426,11 +1443,94 @@ export default function LandingPage() {
         cursorRingRef.current.style.left = rx + 'px'
         cursorRingRef.current.style.top = ry + 'px'
       }
+      if (cursorGlowRef.current) {
+        cursorGlowRef.current.style.left = rx + 'px'
+        cursorGlowRef.current.style.top = ry + 'px'
+      }
       raf = requestAnimationFrame(anim)
     }
     anim()
     return () => { window.removeEventListener('mousemove', move); cancelAnimationFrame(raf) }
   }, [isDesktop])
+
+  // Ambient pad — a few soft detuned sine oscillators through a lowpass filter,
+  // with a slow LFO breathing the cutoff for gentle movement. Pure synthesis,
+  // so there's no audio file to fetch/host and it loops forever for free.
+  const toggleAmbient = useCallback(() => {
+    if (soundOn) {
+      const ctx = audioCtxRef.current
+      const master = masterGainRef.current
+      if (ctx && master) {
+        master.gain.cancelScheduledValues(ctx.currentTime)
+        master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
+        master.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.1)
+      }
+      window.setTimeout(() => ambientStopRef.current?.(), 1200)
+      setSoundOn(false)
+      return
+    }
+
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const AudioCtxCls = window.AudioContext || (window as any).webkitAudioContext
+      const ctx: AudioContext = audioCtxRef.current ?? new AudioCtxCls()
+      audioCtxRef.current = ctx
+      if (ctx.state === 'suspended') ctx.resume()
+
+      const master = ctx.createGain()
+      master.gain.value = 0
+      master.connect(ctx.destination)
+      master.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 1.8)
+      masterGainRef.current = master
+
+      const filter = ctx.createBiquadFilter()
+      filter.type = 'lowpass'
+      filter.frequency.value = 850
+      filter.Q.value = 0.5
+      filter.connect(master)
+
+      // Soft major-ish pad chord, quietest on the higher notes.
+      const freqs = [130.81, 164.81, 196.0, 261.63]
+      const oscs: OscillatorNode[] = []
+      freqs.forEach((f, i) => {
+        const osc = ctx.createOscillator()
+        osc.type = 'sine'
+        osc.frequency.value = f
+        osc.detune.value = (Math.random() - 0.5) * 6
+        const og = ctx.createGain()
+        og.gain.value = 0.2 / (i + 1)
+        osc.connect(og)
+        og.connect(filter)
+        osc.start()
+        oscs.push(osc)
+      })
+
+      // Slow LFO modulating the filter cutoff — gives the pad a gentle "breathing" feel.
+      const lfo = ctx.createOscillator()
+      lfo.frequency.value = 0.045
+      const lfoGain = ctx.createGain()
+      lfoGain.gain.value = 240
+      lfo.connect(lfoGain)
+      lfoGain.connect(filter.frequency)
+      lfo.start()
+
+      ambientStopRef.current = () => {
+        oscs.forEach(o => { try { o.stop() } catch { /* already stopped */ } })
+        try { lfo.stop() } catch { /* already stopped */ }
+      }
+      setSoundOn(true)
+    } catch (err) {
+      console.warn('[Ambient sound] Web Audio API unavailable.', err)
+    }
+  }, [soundOn])
+
+  // Full teardown only on unmount — toggling on/off just fades the master gain.
+  useEffect(() => {
+    return () => {
+      ambientStopRef.current?.()
+      audioCtxRef.current?.close().catch(() => {})
+    }
+  }, [])
 
   const wa = useCallback((msg: string) =>
     `https://wa.me/${s.whatsapp_number}?text=${encodeURIComponent(msg)}`, [s.whatsapp_number])
@@ -1479,6 +1579,18 @@ export default function LandingPage() {
       {/* ── CUSTOM CURSOR ── */}
       {isDesktop && (
         <>
+          <div ref={cursorGlowRef} style={{
+            position: 'fixed', zIndex: 9997, pointerEvents: 'none',
+            width: cursorType === 'hover' ? 240 : cursorType === 'drag' ? 280 : 150,
+            height: cursorType === 'hover' ? 240 : cursorType === 'drag' ? 280 : 150,
+            background: 'radial-gradient(circle, rgba(255,107,40,0.6) 0%, rgba(255,77,0,0.22) 38%, transparent 72%)',
+            borderRadius: '50%',
+            transform: 'translate(-50%,-50%)',
+            filter: 'blur(16px)',
+            mixBlendMode: 'screen',
+            opacity: 0.85,
+            transition: 'width .45s cubic-bezier(.23,1,.32,1), height .45s cubic-bezier(.23,1,.32,1)',
+          }} />
           <div ref={cursorRef} style={{
             position: 'fixed', zIndex: 9999, pointerEvents: 'none',
             width: cursorType === 'drag' ? 48 : cursorType === 'hover' ? 12 : 8,
@@ -1505,6 +1617,18 @@ export default function LandingPage() {
 
       {/* ── WA FAB ── */}
       <a href={wa('Halo Iranza Live')} className="il-wa-fab il-magnetic" target="_blank" rel="noopener" {...addCursorTarget('hover', { magnetic: true, strength: 0.4 })}>💬</a>
+
+      {/* ── AMBIENT SOUND TOGGLE ── */}
+      <button
+        type="button"
+        aria-label={soundOn ? 'Matikan musik ambient' : 'Nyalakan musik ambient'}
+        aria-pressed={soundOn}
+        onClick={toggleAmbient}
+        className={`il-sound-fab${soundOn ? ' active' : ''}`}
+        {...addCursorTarget('hover')}
+      >
+        <NavIcon d={soundOn ? VOLUME_ON_PATH : VOLUME_OFF_PATH} size={18} />
+      </button>
 
       {/* ── NAVBAR ── */}
       <nav className={`il-header-bar${scrolled ? ' scrolled' : ''}`} style={{
@@ -1734,6 +1858,12 @@ export default function LandingPage() {
           }}>02</div>
         </div>
 
+        {!isMobile && (
+          <div style={{ position: 'absolute', top: '6%', right: '5%', width: 300, height: 300, zIndex: 0, opacity: 0.45 }}>
+            <FloatingShape3D shape="octahedron" color={0xFFD600} size={1.3} />
+          </div>
+        )}
+
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           <div data-rid="work-h" style={{ ...rv('work-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 64, alignItems: 'start' }}>
@@ -1817,8 +1947,13 @@ export default function LandingPage() {
       {/* ══════════════════════════════════════════════
           ABOUT / STATS
       ══════════════════════════════════════════════ */}
-      <section id="about" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D' }}>
-        <div style={{ maxWidth: 1240, margin: '0 auto' }}>
+      <section id="about" style={{ padding: isMobile ? '60px 20px' : '100px 48px', borderBottom: '1px solid var(--border)', background: '#0D0D0D', position: 'relative', overflow: 'hidden' }}>
+        {!isMobile && (
+          <div style={{ position: 'absolute', top: '4%', right: '2%', width: 260, height: 260, zIndex: 0, opacity: 0.4 }}>
+            <FloatingShape3D shape="torus" color={0xFF4D00} size={1.2} />
+          </div>
+        )}
+        <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1 }}>
 
           <div data-rid="about-h" style={{ ...rv('about-h'), display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '200px 1fr', gap: isMobile ? 8 : 40, marginBottom: isMobile ? 36 : 72, alignItems: 'start' }}>
             <SplitWords as="span" style={{ fontFamily: "'Space Mono', monospace", fontSize: 11, letterSpacing: '.18em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 8, display: 'inline-block' }}>03 — About</SplitWords>
@@ -2019,6 +2154,12 @@ export default function LandingPage() {
             willChange: 'transform',
           }}>05</div>
         </div>
+
+        {!isMobile && (
+          <div style={{ position: 'absolute', top: '10%', left: '4%', width: 280, height: 280, zIndex: 0, opacity: 0.4 }}>
+            <FloatingShape3D shape="icosahedron" color={0x7C3AED} size={1.3} />
+          </div>
+        )}
 
         <div style={{ maxWidth: 1240, margin: '0 auto', position: 'relative', zIndex: 1, paddingBottom: isMobile ? 60 : 100 }}>
 
