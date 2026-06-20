@@ -1247,6 +1247,8 @@ export default function LandingPage() {
   const audioCtxRef = useRef<AudioContext | null>(null)
   const masterGainRef = useRef<GainNode | null>(null)
   const ambientStopRef = useRef<(() => void) | null>(null)
+  const schedulerIdRef = useRef<number | null>(null)
+  const reverbBufferRef = useRef<AudioBuffer | null>(null)
   const navLinks: { href: string; label: string; icon: string }[] = [
     { href: '#services', label: 'Services', icon: 'M13 2 3 14h7l-1 8 11-13h-7l1-7z' },
     { href: '#work', label: 'Work', icon: 'M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1ZM9 5h6v2H9Z' },
@@ -1454,19 +1456,70 @@ export default function LandingPage() {
     return () => { window.removeEventListener('mousemove', move); cancelAnimationFrame(raf) }
   }, [isDesktop])
 
-  // Ambient pad — a few soft detuned sine oscillators through a lowpass filter,
-  // with a slow LFO breathing the cutoff for gentle movement. Pure synthesis,
-  // so there's no audio file to fetch/host and it loops forever for free.
+  // Generates a short, soft-decaying noise impulse used as a convolution
+  // reverb — gives plucked notes a "concert hall" tail instead of sounding
+  // dry/synthetic. Built once per AudioContext and cached.
+  function getReverbBuffer(ctx: AudioContext): AudioBuffer {
+    if (reverbBufferRef.current) return reverbBufferRef.current
+    const duration = 2.6
+    const len = Math.floor(ctx.sampleRate * duration)
+    const buf = ctx.createBuffer(2, len, ctx.sampleRate)
+    for (let ch = 0; ch < 2; ch++) {
+      const data = buf.getChannelData(ch)
+      for (let i = 0; i < len; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2)
+      }
+    }
+    reverbBufferRef.current = buf
+    return buf
+  }
+
+  // Plays a single soft "piano pluck" — quick attack, slow exponential decay,
+  // split to a dry path and a reverb send so it feels spacious rather than
+  // a flat continuous drone. This is the core of the generative ambient piece.
+  function playNote(
+    ctx: AudioContext, dry: GainNode, wet: GainNode,
+    freq: number, time: number, peak: number, decay: number,
+  ) {
+    const osc = ctx.createOscillator()
+    osc.type = 'triangle'
+    osc.frequency.value = freq
+    // A faint detuned sine layered underneath softens the triangle's edge
+    // and gives the note a touch of warmth, closer to a real piano string.
+    const osc2 = ctx.createOscillator()
+    osc2.type = 'sine'
+    osc2.frequency.value = freq * 2.003
+    const env = ctx.createGain()
+    env.gain.setValueAtTime(0, time)
+    env.gain.linearRampToValueAtTime(peak, time + 0.04)
+    env.gain.exponentialRampToValueAtTime(0.0001, time + decay)
+    const env2 = ctx.createGain()
+    env2.gain.setValueAtTime(0, time)
+    env2.gain.linearRampToValueAtTime(peak * 0.18, time + 0.04)
+    env2.gain.exponentialRampToValueAtTime(0.0001, time + decay * 0.7)
+
+    osc.connect(env); env.connect(dry); env.connect(wet)
+    osc2.connect(env2); env2.connect(dry); env2.connect(wet)
+    osc.start(time); osc.stop(time + decay + 0.2)
+    osc2.start(time); osc2.stop(time + decay + 0.2)
+  }
+
+  // Toggle ambient music — a generative, looping piano-style arpeggio over a
+  // slow chord progression, run through a soft reverb. Synthesized entirely
+  // in the browser (no audio file to host), so it can't break or 404.
   const toggleAmbient = useCallback(() => {
     if (soundOn) {
       const ctx = audioCtxRef.current
       const master = masterGainRef.current
+      if (schedulerIdRef.current !== null) {
+        window.clearTimeout(schedulerIdRef.current)
+        schedulerIdRef.current = null
+      }
       if (ctx && master) {
         master.gain.cancelScheduledValues(ctx.currentTime)
         master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
-        master.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.1)
+        master.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.6)
       }
-      window.setTimeout(() => ambientStopRef.current?.(), 1200)
       setSoundOn(false)
       return
     }
@@ -1478,50 +1531,71 @@ export default function LandingPage() {
       audioCtxRef.current = ctx
       if (ctx.state === 'suspended') ctx.resume()
 
+      // Master bus -> soft limiter so overlapping notes + reverb never clip.
       const master = ctx.createGain()
       master.gain.value = 0
-      master.connect(ctx.destination)
-      master.gain.linearRampToValueAtTime(0.16, ctx.currentTime + 1.8)
+      const limiter = ctx.createDynamicsCompressor()
+      limiter.threshold.value = -10
+      limiter.knee.value = 18
+      limiter.ratio.value = 4
+      limiter.attack.value = 0.01
+      limiter.release.value = 0.25
+      master.connect(limiter)
+      limiter.connect(ctx.destination)
+      master.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 1.4)
       masterGainRef.current = master
 
-      const filter = ctx.createBiquadFilter()
-      filter.type = 'lowpass'
-      filter.frequency.value = 2400
-      filter.Q.value = 0.4
-      filter.connect(master)
+      // Dry bus (close/present) + wet bus through convolution reverb (spacious,
+      // concert-hall feel) — this duality is what makes it sound "real" rather
+      // than synthetic.
+      const dry = ctx.createGain()
+      dry.gain.value = 0.5
+      dry.connect(master)
 
-      // Soft major-ish pad chord. Deliberately a mid/upper register (C4–C5) —
-      // small laptop/phone speakers reproduce this range far better than a
-      // low C3 root, which was the main reason the first version was nearly
-      // inaudible on most devices.
-      const freqs = [261.63, 329.63, 392.0, 523.25]
-      const oscGains = [0.4, 0.28, 0.2, 0.14]
-      const oscs: OscillatorNode[] = []
-      freqs.forEach((f, i) => {
-        const osc = ctx.createOscillator()
-        osc.type = 'sine'
-        osc.frequency.value = f
-        osc.detune.value = (Math.random() - 0.5) * 6
-        const og = ctx.createGain()
-        og.gain.value = oscGains[i]
-        osc.connect(og)
-        og.connect(filter)
-        osc.start()
-        oscs.push(osc)
-      })
+      const convolver = ctx.createConvolver()
+      convolver.buffer = getReverbBuffer(ctx)
+      const wet = ctx.createGain()
+      wet.gain.value = 0.6
+      wet.connect(convolver)
+      convolver.connect(master)
 
-      // Slow LFO modulating the filter cutoff — gives the pad a gentle "breathing" feel.
-      const lfo = ctx.createOscillator()
-      lfo.frequency.value = 0.045
-      const lfoGain = ctx.createGain()
-      lfoGain.gain.value = 500
-      lfo.connect(lfoGain)
-      lfoGain.connect(filter.frequency)
-      lfo.start()
+      // Slow chord progression (Cmaj9 → Am9 → Fmaj7 → G6/9) — a calm,
+      // cinematic loop, arpeggiated one note at a time like a soft piano
+      // rather than a static drone.
+      const progression: number[][] = [
+        [261.63, 329.63, 392.0, 493.88], // Cmaj9 (no root extension, kept light)
+        [220.0, 261.63, 329.63, 392.0],  // Am9
+        [174.61, 220.0, 261.63, 349.23], // Fmaj7
+        [196.0, 246.94, 293.66, 392.0],  // G6/9
+      ]
+
+      let chordIdx = 0
+      let noteIdx = 0
+      const schedule = () => {
+        const chord = progression[chordIdx]
+        const freq = chord[noteIdx % chord.length]
+        playNote(ctx, dry, wet, freq, ctx.currentTime + 0.05, 0.34, 3.4)
+
+        // Occasionally let two notes ring together for a fuller, less
+        // mechanical-sounding texture.
+        if (Math.random() < 0.3) {
+          const harmony = chord[(noteIdx + 2) % chord.length]
+          playNote(ctx, dry, wet, harmony, ctx.currentTime + 0.05, 0.16, 3.0)
+        }
+
+        noteIdx++
+        if (noteIdx % chord.length === 0 && Math.random() < 0.6) {
+          chordIdx = (chordIdx + 1) % progression.length
+        }
+
+        const nextIn = 1300 + Math.random() * 900 // humanized timing
+        schedulerIdRef.current = window.setTimeout(schedule, nextIn)
+      }
+      schedule()
 
       ambientStopRef.current = () => {
-        oscs.forEach(o => { try { o.stop() } catch { /* already stopped */ } })
-        try { lfo.stop() } catch { /* already stopped */ }
+        if (schedulerIdRef.current !== null) window.clearTimeout(schedulerIdRef.current)
+        schedulerIdRef.current = null
       }
       setSoundOn(true)
     } catch (err) {
@@ -1529,7 +1603,8 @@ export default function LandingPage() {
     }
   }, [soundOn])
 
-  // Full teardown only on unmount — toggling on/off just fades the master gain.
+  // Full teardown only on unmount — toggling on/off just stops scheduling
+  // new notes and fades the master bus.
   useEffect(() => {
     return () => {
       ambientStopRef.current?.()
