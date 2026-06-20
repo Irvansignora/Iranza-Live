@@ -1240,15 +1240,12 @@ export default function LandingPage() {
   const [isDesktop, setIsDesktop] = useState(true)
   const [isMobile, setIsMobile] = useState(false)
 
-  // Ambient background sound — synthesized in-browser with the Web Audio API
-  // (no audio file to host/load). Created lazily, on the user's first click,
-  // since browsers block audio with sound until a real user gesture happens.
+  // Ambient background music — plays /ambient.mp3 (put the file in /public,
+  // Vite serves it from the root). Loads lazily on first click since browsers
+  // block audio playback until a real user gesture happens.
   const [soundOn, setSoundOn] = useState(false)
-  const audioCtxRef = useRef<AudioContext | null>(null)
-  const masterGainRef = useRef<GainNode | null>(null)
-  const ambientStopRef = useRef<(() => void) | null>(null)
-  const schedulerIdRef = useRef<number | null>(null)
-  const reverbBufferRef = useRef<AudioBuffer | null>(null)
+  const audioElRef = useRef<HTMLAudioElement>(null)
+  const fadeFrameRef = useRef<number | null>(null)
   const navLinks: { href: string; label: string; icon: string }[] = [
     { href: '#services', label: 'Services', icon: 'M13 2 3 14h7l-1 8 11-13h-7l1-7z' },
     { href: '#work', label: 'Work', icon: 'M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1ZM9 5h6v2H9Z' },
@@ -1456,159 +1453,55 @@ export default function LandingPage() {
     return () => { window.removeEventListener('mousemove', move); cancelAnimationFrame(raf) }
   }, [isDesktop])
 
-  // Generates a short, soft-decaying noise impulse used as a convolution
-  // reverb — gives plucked notes a "concert hall" tail instead of sounding
-  // dry/synthetic. Built once per AudioContext and cached.
-  function getReverbBuffer(ctx: AudioContext): AudioBuffer {
-    if (reverbBufferRef.current) return reverbBufferRef.current
-    const duration = 2.6
-    const len = Math.floor(ctx.sampleRate * duration)
-    const buf = ctx.createBuffer(2, len, ctx.sampleRate)
-    for (let ch = 0; ch < 2; ch++) {
-      const data = buf.getChannelData(ch)
-      for (let i = 0; i < len; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 2.2)
+  // Smoothly ramps the <audio> element's volume to `target` over `ms`,
+  // then calls `done` — used for fade-in on play and fade-out on pause so
+  // there's no abrupt click when toggling.
+  function fadeAudioTo(el: HTMLAudioElement, target: number, ms: number, done?: () => void) {
+    if (fadeFrameRef.current !== null) cancelAnimationFrame(fadeFrameRef.current)
+    const start = el.volume
+    const t0 = performance.now()
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / ms)
+      el.volume = start + (target - start) * p
+      if (p < 1) {
+        fadeFrameRef.current = requestAnimationFrame(step)
+      } else {
+        fadeFrameRef.current = null
+        done?.()
       }
     }
-    reverbBufferRef.current = buf
-    return buf
+    fadeFrameRef.current = requestAnimationFrame(step)
   }
 
-  // Plays a single soft "piano pluck" — quick attack, slow exponential decay,
-  // split to a dry path and a reverb send so it feels spacious rather than
-  // a flat continuous drone. This is the core of the generative ambient piece.
-  function playNote(
-    ctx: AudioContext, dry: GainNode, wet: GainNode,
-    freq: number, time: number, peak: number, decay: number,
-  ) {
-    const osc = ctx.createOscillator()
-    osc.type = 'triangle'
-    osc.frequency.value = freq
-    // A faint detuned sine layered underneath softens the triangle's edge
-    // and gives the note a touch of warmth, closer to a real piano string.
-    const osc2 = ctx.createOscillator()
-    osc2.type = 'sine'
-    osc2.frequency.value = freq * 2.003
-    const env = ctx.createGain()
-    env.gain.setValueAtTime(0, time)
-    env.gain.linearRampToValueAtTime(peak, time + 0.04)
-    env.gain.exponentialRampToValueAtTime(0.0001, time + decay)
-    const env2 = ctx.createGain()
-    env2.gain.setValueAtTime(0, time)
-    env2.gain.linearRampToValueAtTime(peak * 0.18, time + 0.04)
-    env2.gain.exponentialRampToValueAtTime(0.0001, time + decay * 0.7)
-
-    osc.connect(env); env.connect(dry); env.connect(wet)
-    osc2.connect(env2); env2.connect(dry); env2.connect(wet)
-    osc.start(time); osc.stop(time + decay + 0.2)
-    osc2.start(time); osc2.stop(time + decay + 0.2)
-  }
-
-  // Toggle ambient music — a generative, looping piano-style arpeggio over a
-  // slow chord progression, run through a soft reverb. Synthesized entirely
-  // in the browser (no audio file to host), so it can't break or 404.
+  // Toggle ambient music — plays /ambient.mp3 on loop with a soft fade in/out.
+  // Drop your track at `public/ambient.mp3` in the project; Vite serves
+  // everything in /public from the site root, so the path below just works.
   const toggleAmbient = useCallback(() => {
+    const el = audioElRef.current
+    if (!el) return
+
     if (soundOn) {
-      const ctx = audioCtxRef.current
-      const master = masterGainRef.current
-      if (schedulerIdRef.current !== null) {
-        window.clearTimeout(schedulerIdRef.current)
-        schedulerIdRef.current = null
-      }
-      if (ctx && master) {
-        master.gain.cancelScheduledValues(ctx.currentTime)
-        master.gain.setValueAtTime(master.gain.value, ctx.currentTime)
-        master.gain.linearRampToValueAtTime(0, ctx.currentTime + 1.6)
-      }
+      fadeAudioTo(el, 0, 900, () => el.pause())
       setSoundOn(false)
       return
     }
 
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const AudioCtxCls = window.AudioContext || (window as any).webkitAudioContext
-      const ctx: AudioContext = audioCtxRef.current ?? new AudioCtxCls()
-      audioCtxRef.current = ctx
-      if (ctx.state === 'suspended') ctx.resume()
-
-      // Master bus -> soft limiter so overlapping notes + reverb never clip.
-      const master = ctx.createGain()
-      master.gain.value = 0
-      const limiter = ctx.createDynamicsCompressor()
-      limiter.threshold.value = -10
-      limiter.knee.value = 18
-      limiter.ratio.value = 4
-      limiter.attack.value = 0.01
-      limiter.release.value = 0.25
-      master.connect(limiter)
-      limiter.connect(ctx.destination)
-      master.gain.linearRampToValueAtTime(0.55, ctx.currentTime + 1.4)
-      masterGainRef.current = master
-
-      // Dry bus (close/present) + wet bus through convolution reverb (spacious,
-      // concert-hall feel) — this duality is what makes it sound "real" rather
-      // than synthetic.
-      const dry = ctx.createGain()
-      dry.gain.value = 0.5
-      dry.connect(master)
-
-      const convolver = ctx.createConvolver()
-      convolver.buffer = getReverbBuffer(ctx)
-      const wet = ctx.createGain()
-      wet.gain.value = 0.6
-      wet.connect(convolver)
-      convolver.connect(master)
-
-      // Slow chord progression (Cmaj9 → Am9 → Fmaj7 → G6/9) — a calm,
-      // cinematic loop, arpeggiated one note at a time like a soft piano
-      // rather than a static drone.
-      const progression: number[][] = [
-        [261.63, 329.63, 392.0, 493.88], // Cmaj9 (no root extension, kept light)
-        [220.0, 261.63, 329.63, 392.0],  // Am9
-        [174.61, 220.0, 261.63, 349.23], // Fmaj7
-        [196.0, 246.94, 293.66, 392.0],  // G6/9
-      ]
-
-      let chordIdx = 0
-      let noteIdx = 0
-      const schedule = () => {
-        const chord = progression[chordIdx]
-        const freq = chord[noteIdx % chord.length]
-        playNote(ctx, dry, wet, freq, ctx.currentTime + 0.05, 0.34, 3.4)
-
-        // Occasionally let two notes ring together for a fuller, less
-        // mechanical-sounding texture.
-        if (Math.random() < 0.3) {
-          const harmony = chord[(noteIdx + 2) % chord.length]
-          playNote(ctx, dry, wet, harmony, ctx.currentTime + 0.05, 0.16, 3.0)
-        }
-
-        noteIdx++
-        if (noteIdx % chord.length === 0 && Math.random() < 0.6) {
-          chordIdx = (chordIdx + 1) % progression.length
-        }
-
-        const nextIn = 1300 + Math.random() * 900 // humanized timing
-        schedulerIdRef.current = window.setTimeout(schedule, nextIn)
-      }
-      schedule()
-
-      ambientStopRef.current = () => {
-        if (schedulerIdRef.current !== null) window.clearTimeout(schedulerIdRef.current)
-        schedulerIdRef.current = null
-      }
-      setSoundOn(true)
-    } catch (err) {
-      console.warn('[Ambient sound] Web Audio API unavailable.', err)
-    }
+    el.volume = 0
+    el.play()
+      .then(() => {
+        fadeAudioTo(el, 0.4, 1400)
+        setSoundOn(true)
+      })
+      .catch(err => {
+        console.warn('[Ambient sound] Could not play /ambient.mp3 — make sure the file exists at public/ambient.mp3.', err)
+      })
   }, [soundOn])
 
-  // Full teardown only on unmount — toggling on/off just stops scheduling
-  // new notes and fades the master bus.
+  // Pause + cancel any in-flight fade on unmount.
   useEffect(() => {
     return () => {
-      ambientStopRef.current?.()
-      audioCtxRef.current?.close().catch(() => {})
+      if (fadeFrameRef.current !== null) cancelAnimationFrame(fadeFrameRef.current)
+      audioElRef.current?.pause()
     }
   }, [])
 
@@ -1699,6 +1592,7 @@ export default function LandingPage() {
       <a href={wa('Halo Iranza Live')} className="il-wa-fab il-magnetic" target="_blank" rel="noopener" {...addCursorTarget('hover', { magnetic: true, strength: 0.4 })}>💬</a>
 
       {/* ── AMBIENT SOUND TOGGLE ── */}
+      <audio ref={audioElRef} src="/ambient.mp3" loop preload="none" />
       <button
         type="button"
         aria-label={soundOn ? 'Matikan musik ambient' : 'Nyalakan musik ambient'}
