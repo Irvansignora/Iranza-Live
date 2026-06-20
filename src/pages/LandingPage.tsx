@@ -1250,6 +1250,7 @@ export default function LandingPage() {
   const navLinks: { href: string; label: string; icon: string }[] = [
     { href: '#services', label: 'Services', icon: 'M13 2 3 14h7l-1 8 11-13h-7l1-7z' },
     { href: '#work', label: 'Work', icon: 'M20 7h-3V5a2 2 0 0 0-2-2H9a2 2 0 0 0-2 2v2H4a1 1 0 0 0-1 1v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8a1 1 0 0 0-1-1ZM9 5h6v2H9Z' },
+    { href: '#about', label: 'About', icon: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16v-5M12 8h.01' },
     { href: '#pricing', label: 'Pricing', icon: 'M20.59 13.41 11 23l-9-9V4a2 2 0 0 1 2-2h9.41a2 2 0 0 1 1.41.59l7 7a2 2 0 0 1 0 2.82ZM7 7h.01' },
     { href: '#proses', label: 'Proses', icon: 'M3 6h.01M3 12h.01M3 18h.01M8 6h13M8 12h13M8 18h13' },
   ]
@@ -1480,17 +1481,21 @@ export default function LandingPage() {
       const master = ctx.createGain()
       master.gain.value = 0
       master.connect(ctx.destination)
-      master.gain.linearRampToValueAtTime(0.06, ctx.currentTime + 1.8)
+      master.gain.linearRampToValueAtTime(0.16, ctx.currentTime + 1.8)
       masterGainRef.current = master
 
       const filter = ctx.createBiquadFilter()
       filter.type = 'lowpass'
-      filter.frequency.value = 850
-      filter.Q.value = 0.5
+      filter.frequency.value = 2400
+      filter.Q.value = 0.4
       filter.connect(master)
 
-      // Soft major-ish pad chord, quietest on the higher notes.
-      const freqs = [130.81, 164.81, 196.0, 261.63]
+      // Soft major-ish pad chord. Deliberately a mid/upper register (C4–C5) —
+      // small laptop/phone speakers reproduce this range far better than a
+      // low C3 root, which was the main reason the first version was nearly
+      // inaudible on most devices.
+      const freqs = [261.63, 329.63, 392.0, 523.25]
+      const oscGains = [0.4, 0.28, 0.2, 0.14]
       const oscs: OscillatorNode[] = []
       freqs.forEach((f, i) => {
         const osc = ctx.createOscillator()
@@ -1498,7 +1503,7 @@ export default function LandingPage() {
         osc.frequency.value = f
         osc.detune.value = (Math.random() - 0.5) * 6
         const og = ctx.createGain()
-        og.gain.value = 0.2 / (i + 1)
+        og.gain.value = oscGains[i]
         osc.connect(og)
         og.connect(filter)
         osc.start()
@@ -1509,7 +1514,7 @@ export default function LandingPage() {
       const lfo = ctx.createOscillator()
       lfo.frequency.value = 0.045
       const lfoGain = ctx.createGain()
-      lfoGain.gain.value = 240
+      lfoGain.gain.value = 500
       lfo.connect(lfoGain)
       lfoGain.connect(filter.frequency)
       lfo.start()
@@ -1882,30 +1887,10 @@ export default function LandingPage() {
 
           {hasPhotos ? (
             <>
-              {!isMobile && (
-                <div
-                  data-rid="work-feature"
-                  style={{ ...rv('work-feature', 60), marginBottom: 28, position: 'relative' }}
-                >
-                  <DistortedImage
-                    src={getCloudinaryThumbnail(s.hero_photos[0].cloudinary_url, 1400, 560)}
-                    alt={s.hero_photos[0].caption || 'Studio Iranza Live'}
-                    style={{ width: '100%', height: 420, borderRadius: 12, border: '1px solid var(--border)' }}
-                  />
-                  <span style={{
-                    position: 'absolute', bottom: 16, left: 16,
-                    fontFamily: "'Space Mono', monospace", fontSize: 10, letterSpacing: '.12em', textTransform: 'uppercase',
-                    color: 'rgba(242,239,232,0.65)', background: 'rgba(10,10,10,0.55)', backdropFilter: 'blur(8px)',
-                    padding: '6px 12px', borderRadius: 100, pointerEvents: 'none',
-                  }}>
-                    ↝ Gerakkan kursor di atas foto
-                  </span>
-                </div>
-              )}
               <div
                 data-rid="work-photos"
                 style={{
-                  ...rv('work-photos', 100),
+                  ...rv('work-photos', 60),
                   // Desktop: bleed out of the container to full viewport width
                   // Mobile: reset margin to 0, negative bleed breaks layout on narrow screens
                   marginLeft: isMobile ? 0 : 'calc(-1 * ((100vw - 1240px) / 2))',
